@@ -8,12 +8,12 @@ with open("readme.md", "r", encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-     name='ArtViz',
+     name='ARTist',
      version='0.0.1',
      description='Post-processing and plotting ICON-ART output in python',
      long_description=long_description,
      long_description_content_type='text/markdown',
-     url='https://github.com/pankajkarman/ArtViz',
+     url='https://github.com/pankajkarman/ARTist',
      author='Pankaj Kumar',
      author_email='pankaj.kmr1990@gmail.com',
      license='MIT',

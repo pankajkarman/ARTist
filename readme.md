@@ -28,7 +28,7 @@ Latest documentation is available [here](https://pankajkarman.github.io/ArtViz/)
 
 ## Usage
 
-`ArtViz` is easy to use. Just import using:
+`ARTist` is easy to use. Just import using:
 
 ```python
 import xarray as xr

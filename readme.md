@@ -2,7 +2,7 @@
 
 python library for post-processing and plotting [**ICON-ART**](https://www.imk-tro.kit.edu/english/5925.php) output.
 
-**Aerosol and Reactive Trace gases (ART)**, as a submodule of [**ICON**](https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html), supplements the model by including emissions, transport, gas phase chemistry, and aerosol dynamics in the troposphere and stratosphere. ART is being developed and maintained at Karlsruhe Institute of Technology (KIT) Germany.
+**Aerosol and Reactive Trace gases (ART)**, as a submodule of [**ICON**](https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html), supplements the model by including emissions, transport, gas phase chemistry, and aerosol dynamics in the troposphere and stratosphere. ART is being developed and maintained at [**Karlsruhe Institute of Technology (KIT) Germany**](https://www.imk-tro.kit.edu/english/3487.php).
 
 ## Installation
 

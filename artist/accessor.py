@@ -48,7 +48,7 @@ class GeoAccessor(object):
     def regrid(self, g, lon, lat, method='linear'):
         rad2deg = 45./np.arctan(1.) 
         clon, clat = g.clon*rad2deg, g.clat*rad2deg
-        x, y = np.meshgrid(lon, lat)
+        y, x = np.meshgrid(lat, lon)
         nda = griddata((clon, clat), self._obj.squeeze(), (x, y), method=method)
         nda = xr.DataArray(nda, dims=['Longitude', 'Latitude'], coords=[lon, lat])    
-        return nda
+        return nda.T

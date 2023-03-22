@@ -27,7 +27,7 @@ pip install git+https://github.com/pankajkarman/ARTist.git
 
 ## Documentation
 
-Latest documentation is available [here](https://pankajkarman.github.io/ArtViz/).
+Latest documentation is available [here](https://pankajkarman.github.io/artist/).
 
 
 ## Usage
@@ -46,15 +46,22 @@ ds = xr.open_dataset(filename)
 da = ds['ash_mixed_acc']
 
 g, vlon, vlat, clon, clat = ds.icon.add_grid(gridfile)
-dz = da.icon.regrid(g, lon_vec, lat_vec, method='linear')
+```
+Plot using native Triangular Grids
+```python
+fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+da.icon.tri_plot(gridfile, ax)
+plt.show()
+```
+![Mineral Dust Forecast](./figs/ash_mixed_native.png)
 
-dz.viz.plot()
+Regrid to Rectangular Grids and plot
+
+```python
+dz = da.icon.regrid(gridfile, lon_vec, lat_vec, method='linear')
+dz.plot()
 ```
 ![Mineral Dust Forecast](./figs/ash_mixed.png)
-
-
-
-
 
 
 

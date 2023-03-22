@@ -4,7 +4,7 @@ python library for post-processing and plotting [**<ins>ICON-ART</ins>**](https:
 
 **Aerosol and Reactive Trace gases (ART)**, as a submodule of [**<ins>ICON</ins>**](https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html), supplements the model by including emissions, transport, gas phase chemistry, and aerosol dynamics in the troposphere and stratosphere. ART is being developed and maintained at [**<ins>Karlsruhe Institute of Technology (KIT) Germany</ins>**](https://www.imk-tro.kit.edu/english/3487.php).
 
-<img src="https://www.imk-tro.kit.edu/img/content/bluemarble-180dpi-optimized.gif"/>
+![Mineral Dust Forecast](./figs/dust.gif)
 
 ## Installation
 
@@ -44,11 +44,20 @@ And get going.
 ```python
 ds = xr.open_dataset(filename)
 da = ds['ash_mixed_acc']
+```
+Plot using native traingular grids:
 
-g, vlon, vlat, clon, clat = ds.icon.add_grid(gridfile)
+```python
+fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+da.icon.tri_plot(gridfile, ax)
+```
+![Mineral Dust Forecast](./figs/ash_mixed_native.png)
+
+Regrid to Rectangular Grids and plot:
+
+```python
 dz = da.icon.regrid(g, lon_vec, lat_vec, method='linear')
-
-dz.viz.plot()
+dz.plot()
 ```
 ![Mineral Dust Forecast](./figs/ash_mixed.png)
 

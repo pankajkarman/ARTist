@@ -4,6 +4,8 @@ python library for post-processing and plotting [**<ins>ICON-ART</ins>**](https:
 
 **Aerosol and Reactive Trace gases (ART)**, as a submodule of [**<ins>ICON</ins>**](https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html), supplements the model by including emissions, transport, gas phase chemistry, and aerosol dynamics in the troposphere and stratosphere. ART is being developed and maintained at [**<ins>Karlsruhe Institute of Technology (KIT) Germany</ins>**](https://www.imk-tro.kit.edu/english/3487.php).
 
+![Mineral Dust Forecast](./figs/dust.gif)
+
 ## Installation
 
 ### Install using pip:
@@ -48,8 +50,9 @@ dz = da.icon.regrid(g, lon_vec, lat_vec, method='linear')
 
 dz.viz.plot()
 ```
+![Mineral Dust Forecast](./figs/ash_mixed.png)
 
-![Mineral Dust Forecast](./figs/dust.gif)
+
 
 
 

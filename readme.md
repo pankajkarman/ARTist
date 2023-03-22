@@ -41,10 +41,10 @@ And get going.
 
 ```python
 ds = xr.open_dataset(filename)
-varM = ds['ash_mixed_acc']
+da = ds['ash_mixed_acc']
 
 g, vlon, vlat, clon, clat = ds.icon.add_grid(gridfile)
-dz = varM.geo.regrid(g, lon_vec, lat_vec, method='linear')
+dz = da.icon.regrid(g, lon_vec, lat_vec, method='linear')
 
 dz.viz.plot()
 ```

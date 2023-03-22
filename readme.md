@@ -4,7 +4,7 @@ python library for post-processing and plotting [**<ins>ICON-ART</ins>**](https:
 
 **Aerosol and Reactive Trace gases (ART)**, as a submodule of [**<ins>ICON</ins>**](https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html), supplements the model by including emissions, transport, gas phase chemistry, and aerosol dynamics in the troposphere and stratosphere. ART is being developed and maintained at [**<ins>Karlsruhe Institute of Technology (KIT) Germany</ins>**](https://www.imk-tro.kit.edu/english/3487.php).
 
-![Mineral Dust Forecast](./figs/dust.gif)
+<a><img src="https://www.imk-tro.kit.edu/img/content/bluemarble-180dpi-optimized.gif"/></a>
 
 ## Installation
 

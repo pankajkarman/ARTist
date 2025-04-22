@@ -11,11 +11,7 @@ class PlotAccessor(object):
     def __init__(self, da):
         self._obj = da
     
-    def plot(self):
-        print('Wait: Figures are on the way.')
-        pass
-    
-    def tri_plot(self, ax, cmap='coolwarm', levels=10, add_colorbar=True, map_extent=None, projection=None):
+    def tricontourf(self, ax, cmap='coolwarm', levels=10, add_colorbar=True, map_extent=None, projection=None):
         if projection:
             if projection == ccrs.PlateCarree():
                 tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)

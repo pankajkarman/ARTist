@@ -36,7 +36,10 @@ class PlotAccessor(object):
 
         if add_colorbar:
             cbar = plt.colorbar(tcf, orientation='vertical', pad=0.05)
-            cbar.set_label(self._obj.attrs['standard_name'])
+            try:
+                cbar.set_label(self._obj.attrs['standard_name'])
+            except:
+                pass
         return ax
     
     

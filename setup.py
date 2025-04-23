@@ -8,7 +8,7 @@ with open("readme.md", "r", encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-     name='ARTist',
+     name='icon-artist',
      version='0.0.1',
      description='Post-processing and plotting ICON-ART output in python',
      long_description=long_description,

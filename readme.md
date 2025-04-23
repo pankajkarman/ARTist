@@ -11,7 +11,7 @@ python library for post-processing and plotting [**<ins>ICON-ART</ins>**](https:
 ### Install using pip:
 
 ```bash
-pip install ARTist
+pip install icon-artist
 ```
 or
 

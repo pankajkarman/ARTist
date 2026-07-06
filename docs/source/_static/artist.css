@@ -1,0 +1,65 @@
+.artist-hero {
+  margin: 1.5rem 0 2rem;
+}
+
+.artist-hero .artist-tagline {
+  font-size: 1.35rem;
+  line-height: 1.5;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.artist-meta {
+  color: var(--pst-color-text-muted, #5f6368);
+  font-size: 0.95rem;
+  margin: 0.5rem 0;
+}
+
+.artist-links {
+  font-size: 0.95rem;
+  margin-top: 0.5rem;
+}
+
+.artist-card-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  margin: 2rem 0;
+}
+
+.artist-card {
+  border: 1px solid var(--pst-color-border, #d8dee4);
+  border-radius: 8px;
+  padding: 1.25rem;
+  background: var(--pst-color-background, #fff);
+  min-height: 12rem;
+}
+
+.artist-card:hover {
+  border-color: var(--pst-color-primary, #0f62fe);
+  box-shadow: 0 0.25rem 1rem rgba(15, 23, 42, 0.08);
+}
+
+.artist-card-icon {
+  align-items: center;
+  border: 1px solid var(--pst-color-border, #d8dee4);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 1.5rem;
+  height: 3rem;
+  justify-content: center;
+  margin-bottom: 0.85rem;
+  width: 3rem;
+}
+
+.artist-card h2 {
+  font-size: 1.25rem;
+  margin: 0 0 0.65rem;
+}
+
+.artist-card p {
+  margin-bottom: 1rem;
+}
+
+.artist-card a {
+  font-weight: 600;
+}

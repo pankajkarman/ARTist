@@ -1,59 +1,40 @@
-import glob
 import xarray as xr
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from scipy.interpolate import griddata
-import cartopy.crs as ccrs
 
-@xr.register_dataarray_accessor('viz')
-class PlotAccessor(object):
-    def __init__(self, da):
-        self._obj = da
-    
-    def tricontourf(self, ax, cmap='coolwarm', levels=10, add_colorbar=True, map_extent=None, projection=None):
-        if projection:
-            if projection == ccrs.PlateCarree():
-                tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)
-            else:
-                try:
-                    mproj = projection.transform_points(
-                        ccrs.PlateCarree(),
-                        self._obj.clon,
-                        self._obj.clat
-                    )
-                    x, y =  mproj[:, 0],  mproj[:, 1]
-                    tcf = ax.tricontourf(x, y, self._obj, cmap=cmap, levels=levels)
-                except:
-                    ax.set_global()
-                    tcf = ax.tricontourf(self._obj.clon,  self._obj.clat, self._obj,
-                            levels=levels,
-                            cmap=cmap,
-                            transform=ccrs.PlateCarree())
-
-        else:
-            tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)
-
-        if add_colorbar:
-            cbar = plt.colorbar(tcf, orientation='vertical', pad=0.05)
-            try:
-                cbar.set_label(self._obj.attrs['standard_name'])
-            except:
-                pass
-        return ax
-    
-    
 def add_grid(gridfile, ltranslon=True):
-    rad2deg = 45./np.arctan(1.)
-    g = xr.open_dataset(gridfile) 
-    vlon = g.clon_vertices
-    vlat = g.clat_vertices
-    vlon, vlat = vlon*rad2deg, vlat*rad2deg
-    clon, clat = g.clon*rad2deg, g.clat*rad2deg
-    # ncells, nv = vlon.shape[0], vlon.shape[1]
+    """
+    Open an ICON grid file and return grid geometry in degrees.
+
+    Parameters
+    ----------
+    gridfile : str or path-like
+        Path to an ICON grid NetCDF file containing `clon`, `clat`,
+        `clon_vertices`, and `clat_vertices` in radians.
+    ltranslon : bool, default True
+        If True, transform longitudes from the [-180, 180] convention to
+        [0, 360].
+
+    Returns
+    -------
+    tuple
+        `(grid, vlon, vlat, clon, clat)`, where `grid` is the opened xarray
+        dataset and all coordinate arrays are converted to degrees.
+
+    Examples
+    --------
+    >>> from artist.utils import add_grid
+    >>> grid, vlon, vlat, clon, clat = add_grid("icon_grid.nc")
+    """
+    rad2deg = 180.0 / np.pi
+    g = xr.open_dataset(gridfile)
+
+    vlon = g.clon_vertices * rad2deg
+    vlat = g.clat_vertices * rad2deg
+    clon = g.clon * rad2deg
+    clat = g.clat * rad2deg
+
     if ltranslon:
         vlon = (vlon + 360) % 360
         clon = (clon + 360) % 360
-    else:
-        vlon = vlon
+
     return g, vlon, vlat, clon, clat

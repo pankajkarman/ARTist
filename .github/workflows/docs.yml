@@ -60,6 +60,7 @@ jobs:
           path: docs/build/html
 
   deploy:
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/new_dev'
     needs: build
     runs-on: ubuntu-latest
     environment:

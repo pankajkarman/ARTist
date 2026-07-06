@@ -103,6 +103,19 @@ fig, ax = plt.subplots(1, 1, figsize=(10, 4), subplot_kw={'projection': projecti
 da.viz.tricontourf(ax=ax, projection=projection, cmap='jet')
 ```
 
+Use the PolyCollection backend after `ds.icon.add_grid(...)` when you want to
+draw native ICON cell polygons from the grid vertices:
+
+```python
+da.viz.tricontourf(
+    ax=ax,
+    backend="polycollection",
+    projection=projection,
+    cmap="jet",
+    edgecolor="face",
+)
+```
+
 ![Native triangular mineral dust forecast](./figs/native.png)
 
 ## Regridding

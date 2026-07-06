@@ -74,6 +74,12 @@ class IconAccessor(object):
         if cell_dim in self._obj.dims and self._obj.sizes[cell_dim] == clon_values.size:
             self._obj.coords["clon"] = (cell_dim, clon_values)
             self._obj.coords["clat"] = (cell_dim, clat_values)
+            vlon_values = np.asarray(vlon.values)
+            vlat_values = np.asarray(vlat.values)
+            for name, var in self._obj.data_vars.items():
+                if cell_dim in var.dims and var.sizes[cell_dim] == clon_values.size:
+                    self._obj[name].attrs["_artist_vlon"] = vlon_values
+                    self._obj[name].attrs["_artist_vlat"] = vlat_values
 
         self._grid_points = np.column_stack((clon_values, clat_values))
         self._tree = None

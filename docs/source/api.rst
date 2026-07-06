@@ -56,6 +56,13 @@ DataArray grid accessor: ``da.icon``
 ``tri_plot(gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None)``
    Plot a field on ICON triangular cells.
 
+DataArray plotting accessor: ``da.viz``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``da.viz.tricontourf(ax, cmap="coolwarm", levels=10, backend="tricontourf", ...)``
+   Plot a field from cell centers with Matplotlib ``tricontourf`` or from ICON
+   cell vertices with the ``"polycollection"`` backend.
+
 ART tracer accessor: ``da.art``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

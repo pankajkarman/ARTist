@@ -14,6 +14,27 @@ Native Triangular Cells
    fig, ax = plt.subplots(figsize=(12, 6))
    da.icon.tri_plot("icon_grid.nc", ax)
 
+PolyCollection Backend
+----------------------
+
+For large native-grid fields or nested-domain outlines, ``da.viz.tricontourf``
+can draw ICON cell polygons directly with Matplotlib ``PolyCollection`` after
+``ds.icon.add_grid(...)`` has attached the grid:
+
+.. code-block:: python
+
+   import cartopy.crs as ccrs
+   import matplotlib.pyplot as plt
+
+   projection = ccrs.Robinson()
+   fig, ax = plt.subplots(subplot_kw={"projection": projection})
+   da.viz.tricontourf(
+       ax,
+       backend="polycollection",
+       projection=projection,
+       edgecolor="face",
+   )
+
 Quick Map
 ---------
 

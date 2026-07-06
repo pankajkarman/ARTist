@@ -189,7 +189,21 @@ class PlotAccessor(object):
     def __init__(self, da):
         self._obj = da
     
-    def tricontourf(self, ax, cmap='coolwarm', levels=10, add_colorbar=True, map_extent=None, projection=None):
+    def tricontourf(
+        self,
+        ax,
+        cmap="coolwarm",
+        levels=10,
+        add_colorbar=True,
+        map_extent=None,
+        projection=None,
+        backend="tricontourf",
+        vlon=None,
+        vlat=None,
+        vrange=None,
+        edgecolor="face",
+        linewidth=0.0,
+    ):
         """
         Draw a triangular contour plot from native lon/lat cell centers.
 
@@ -207,6 +221,19 @@ class PlotAccessor(object):
             Reserved for future extent handling.
         projection : cartopy.crs.Projection, optional
             Projection used to transform `clon`/`clat`.
+        backend : {"tricontourf", "polycollection"}, default "tricontourf"
+            Plotting backend. Use "polycollection" to draw native ICON cell
+            polygons from vertex coordinates.
+        vlon, vlat : array-like, optional
+            Vertex longitude and latitude arrays in degrees with shape
+            `(ncells, vertices)`. Usually these are attached by
+            `ds.icon.add_grid(...)`.
+        vrange : sequence, optional
+            Two-value color range used by the "polycollection" backend.
+        edgecolor : color, default "face"
+            Polygon edge color for the "polycollection" backend.
+        linewidth : float, default 0.0
+            Polygon edge width for the "polycollection" backend.
 
         Examples
         --------
@@ -215,9 +242,27 @@ class PlotAccessor(object):
         >>> import artist
         >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
         >>> da.viz.tricontourf(ax, projection=ccrs.Robinson())
+        >>> da.viz.tricontourf(ax, backend="polycollection")
         """
-        ccrs, _ = _cartopy()
+        backend = backend.lower()
+        if backend in {"poly", "polycollection", "collection"}:
+            return self._polycollection(
+                ax,
+                cmap=cmap,
+                add_colorbar=add_colorbar,
+                projection=projection,
+                map_extent=map_extent,
+                vlon=vlon,
+                vlat=vlat,
+                vrange=vrange,
+                edgecolor=edgecolor,
+                linewidth=linewidth,
+            )
+        if backend != "tricontourf":
+            raise ValueError("backend must be 'tricontourf' or 'polycollection'.")
+
         if projection:
+            ccrs, _ = _cartopy()
             if projection == ccrs.PlateCarree():
                 tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)
             else:
@@ -246,6 +291,93 @@ class PlotAccessor(object):
             except:
                 pass
         return ax
+
+    def _polycollection(
+        self,
+        ax,
+        cmap="coolwarm",
+        add_colorbar=True,
+        projection=None,
+        map_extent=None,
+        vlon=None,
+        vlat=None,
+        vrange=None,
+        edgecolor="face",
+        linewidth=0.0,
+    ):
+        """
+        Draw native ICON cell polygons using Matplotlib PolyCollection.
+        """
+        values = np.asarray(self._obj.squeeze().values)
+        vertices_lon, vertices_lat = self._get_vertices(vlon=vlon, vlat=vlat)
+        vertices_lon = np.asarray(vertices_lon)
+        vertices_lat = np.asarray(vertices_lat)
+
+        if vertices_lon.shape != vertices_lat.shape:
+            raise ValueError("vlon and vlat must have the same shape.")
+        if vertices_lon.shape[0] != values.size:
+            raise ValueError("Vertex arrays must have one row for each DataArray cell.")
+
+        values = values.ravel()
+        valid = np.isfinite(values) & ~np.isnan(vertices_lon).any(axis=1) & ~np.isnan(vertices_lat).any(axis=1)
+        vertices_lon = vertices_lon[valid]
+        vertices_lat = vertices_lat[valid]
+        values = values[valid]
+
+        if vrange is not None and len(vrange) > 0:
+            norm = mpl.colors.Normalize(vmin=vrange[0], vmax=vrange[-1])
+        else:
+            norm = mpl.colors.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
+
+        scalar_map = cm.ScalarMappable(norm=norm, cmap=cmap)
+        colors = scalar_map.to_rgba(values)
+        polygons = [np.column_stack((vertices_lon[i], vertices_lat[i])) for i in range(vertices_lon.shape[0])]
+
+        transform = None
+        if projection is not None or hasattr(ax, "projection"):
+            ccrs, _ = _cartopy()
+            transform = ccrs.PlateCarree()
+
+        collection = PolyCollection(
+            polygons,
+            facecolor=colors,
+            closed=True,
+            edgecolor=edgecolor,
+            linewidth=linewidth,
+            transform=transform,
+        )
+        ax.add_collection(collection, autolim=True)
+
+        if map_extent is not None:
+            if hasattr(ax, "set_extent"):
+                ccrs, _ = _cartopy()
+                ax.set_extent(map_extent, crs=ccrs.PlateCarree())
+            else:
+                ax.set_xlim([map_extent[0], map_extent[1]])
+                ax.set_ylim([map_extent[2], map_extent[3]])
+        elif not hasattr(ax, "projection"):
+            ax.autoscale_view()
+
+        if add_colorbar:
+            plt.colorbar(scalar_map, ax=ax, orientation="vertical", pad=0.05)
+        return ax
+
+    def _get_vertices(self, vlon=None, vlat=None):
+        if vlon is not None and vlat is not None:
+            return vlon, vlat
+
+        for lon_name, lat_name in (("vlon", "vlat"), ("clon_vertices", "clat_vertices")):
+            if lon_name in self._obj.coords and lat_name in self._obj.coords:
+                return self._obj.coords[lon_name].values, self._obj.coords[lat_name].values
+
+        if "_artist_vlon" in self._obj.attrs and "_artist_vlat" in self._obj.attrs:
+            return self._obj.attrs["_artist_vlon"], self._obj.attrs["_artist_vlat"]
+
+        raise ValueError(
+            "PolyCollection plotting needs vertex coordinates. Call "
+            "ds.icon.add_grid(...) before selecting this DataArray, or pass "
+            "vlon=... and vlat=... explicitly."
+        )
 
 
 def show_slice_line(self, points, gridpoints, grid_stride=5):

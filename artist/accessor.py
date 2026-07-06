@@ -72,10 +72,22 @@ class IconAccessor(object):
         clat_values = np.asarray(clat.values)
 
         if cell_dim in self._obj.dims and self._obj.sizes[cell_dim] == clon_values.size:
+            if cell_dim not in self._obj.coords:
+                self._obj.coords[cell_dim] = np.arange(clon_values.size)
             self._obj.coords["clon"] = (cell_dim, clon_values)
             self._obj.coords["clat"] = (cell_dim, clat_values)
             vlon_values = np.asarray(vlon.values)
             vlat_values = np.asarray(vlat.values)
+            if vlon_values.shape[0] != clon_values.size and vlon_values.shape[-1] == clon_values.size:
+                vlon_values = vlon_values.T
+                vlat_values = vlat_values.T
+            if vlon_values.shape[0] != clon_values.size:
+                raise ValueError("Grid vertex arrays do not align with the dataset cell dimension.")
+            vertex_dim = "vertices"
+            if vertex_dim in self._obj.dims and self._obj.sizes[vertex_dim] != vlon_values.shape[1]:
+                vertex_dim = "_artist_vertices"
+            self._obj.coords["clon_vertices"] = ((cell_dim, vertex_dim), vlon_values)
+            self._obj.coords["clat_vertices"] = ((cell_dim, vertex_dim), vlat_values)
             for name, var in self._obj.data_vars.items():
                 if cell_dim in var.dims and var.sizes[cell_dim] == clon_values.size:
                     self._obj[name].attrs["_artist_vlon"] = vlon_values
@@ -368,6 +380,19 @@ class GridAccessor(object):
             clon = (clon + 360) % 360
         return clon, clat
 
+    def _cell_dim(self, size):
+        for dim in ("ncells", "cell"):
+            if dim in self._obj.dims and self._obj.sizes[dim] == size:
+                return dim
+        matches = [dim for dim in self._obj.dims if self._obj.sizes[dim] == size]
+        if len(matches) == 1:
+            return matches[0]
+        raise ValueError(
+            "Could not identify the native cell dimension for this DataArray. "
+            "Expected a dimension named 'ncells' or a unique dimension with "
+            "{} cells.".format(size)
+        )
+
     def regrid(self, *args, lon=None, lat=None, method='linear', ltranslon=True, gridfile=None):
         """
         Interpolate a native ICON field to a regular lon/lat grid.
@@ -420,11 +445,25 @@ class GridAccessor(object):
                 "DataArray.icon.regrid()."
             ) from exc
 
+        lon = np.asarray(lon)
+        lat = np.asarray(lat)
+        if lon.ndim != 1 or lat.ndim != 1:
+            raise ValueError("regrid() expects 1-D target lon and lat arrays.")
+
         clon, clat = self._grid_centers(gridfile=gridfile, ltranslon=ltranslon)
-        y, x = np.meshgrid(lat, lon)
-        nda = griddata((clon, clat), self._obj.squeeze(), (x, y), method=method)
-        nda = xr.DataArray(nda, dims=['Longitude', 'Latitude'], coords=[lon, lat])   
-        return nda.T
+        cell_dim = self._cell_dim(clon.size)
+        da = self._obj.transpose(cell_dim, ...)
+        other_dims = [dim for dim in da.dims if dim != cell_dim]
+        values = np.asarray(da.values)
+
+        lon_grid, lat_grid = np.meshgrid(lon, lat)
+        interpolated = griddata((clon, clat), values, (lon_grid, lat_grid), method=method)
+
+        if other_dims:
+            interpolated = np.moveaxis(interpolated, (0, 1), (-2, -1))
+        coords = {dim: da.coords[dim] for dim in other_dims if dim in da.coords}
+        coords.update({"Latitude": lat, "Longitude": lon})
+        return xr.DataArray(interpolated, dims=other_dims + ["Latitude", "Longitude"], coords=coords)
 
     def tri_data(self, gridfile=None, cmap=None, vrange=[], ltranslon=True):
         """

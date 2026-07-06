@@ -441,6 +441,12 @@ def _dataarray_vertices(da, gridfile=None, ltranslon=False):
         if "_artist_vlon" in da.attrs and "_artist_vlat" in da.attrs:
             vlon = np.asarray(da.attrs["_artist_vlon"])
             vlat = np.asarray(da.attrs["_artist_vlat"])
+            cell_dim = "ncells" if "ncells" in da.dims else "cell" if "cell" in da.dims else None
+            if cell_dim is not None and vlon.shape[0] != da.sizes[cell_dim] and cell_dim in da.coords:
+                index = np.asarray(da.coords[cell_dim].values)
+                if np.issubdtype(index.dtype, np.integer) and index.size == da.sizes[cell_dim]:
+                    vlon = vlon[index]
+                    vlat = vlat[index]
         elif gridfile is not None:
             _, vlon, vlat, _, _ = add_grid(gridfile, ltranslon=ltranslon)
             vlon = np.asarray(vlon.values)
@@ -455,6 +461,20 @@ def _dataarray_vertices(da, gridfile=None, ltranslon=False):
     if ltranslon:
         vlon = (vlon + 360) % 360
     return vlon, vlat
+
+
+def _cell_dim(da, size):
+    for dim in ("ncells", "cell"):
+        if dim in da.dims and da.sizes[dim] == size:
+            return dim
+    matches = [dim for dim in da.dims if da.sizes[dim] == size]
+    if len(matches) == 1:
+        return matches[0]
+    raise ValueError(
+        "Could not identify the native cell dimension for this DataArray. "
+        "Expected a dimension named 'ncells' or a unique dimension with "
+        "{} cells.".format(size)
+    )
 
 
 def tri_data(self, gridfile=None, cmap=None, vrange=[], ltranslon=True):
@@ -480,16 +500,37 @@ def tri_data(self, gridfile=None, cmap=None, vrange=[], ltranslon=True):
     >>> ds.icon.add_grid("icon_grid.nc")
     >>> triangles, colors, cmap = ds["ash_mixed_acc"].icon.tri_data()
     """
+    vlon, vlat = _dataarray_vertices(self._obj, gridfile=gridfile, ltranslon=ltranslon)
+    vlon = np.asarray(vlon)
+    vlat = np.asarray(vlat)
+    if vlon.shape != vlat.shape or vlon.ndim != 2:
+        raise ValueError("ICON vertex coordinates must be two 2-D arrays with matching shape.")
+
+    cell_dim = _cell_dim(self._obj, vlon.shape[0])
+    da = self._obj.squeeze(drop=True).transpose(cell_dim, ...)
+    if da.ndim != 1:
+        raise ValueError(
+            "tri_data() plots one native field at a time. Select one time/height "
+            "slice before calling it."
+        )
+
+    values = np.asarray(da.values)
+    if values.size != vlon.shape[0]:
+        raise ValueError(
+            "DataArray values and ICON vertices are not aligned: got {} values "
+            "and {} vertex rows.".format(values.size, vlon.shape[0])
+        )
+
     cmap = cmap or cm.viridis
     if len(vrange) > 0:
         norm = mpl.colors.Normalize(vmin=vrange[0], vmax=vrange[-1])
     else:
-        norm = mpl.colors.Normalize(vmin=self._obj.min(), vmax=self._obj.max())
+        norm = mpl.colors.Normalize(vmin=np.nanmin(values), vmax=np.nanmax(values))
 
-    self.vlon, self.vlat = _dataarray_vertices(self._obj, gridfile=gridfile, ltranslon=ltranslon)
+    self.vlon, self.vlat = vlon, vlat
     cmp = cm.ScalarMappable(norm=norm, cmap=cmap)
     triangles = np.stack((self.vlon, self.vlat), axis=2)
-    colors = cmp.to_rgba(np.asarray(self._obj.squeeze()).ravel())
+    colors = cmp.to_rgba(values)
     return triangles, colors, cmp
 
 

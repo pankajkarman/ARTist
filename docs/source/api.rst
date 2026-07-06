@@ -91,6 +91,29 @@ ART tracer accessor: ``da.art``
 ``quick_plot(gridfile=None, cmap="coolwarm", levels=10, projection=None)``
    Quickly plot a field on a Cartopy map.
 
+ART dataset accessor: ``ds.art``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ds.art`` provides dataset-level ICON-ART optical diagnostics:
+
+``rayleigh_part(wavelength, height_ref=90, scale_height=1.0)``
+   Compute Rayleigh extinction and backscatter coefficients.
+
+``att_bsct(wavelength)``
+   Compute attenuated backscatter for aerosol tracers.
+
+``att_bsct_sph(wavelength)``
+   Compute attenuated backscatter using spherical aerosol fractions.
+
+``aod(wavelength)``
+   Compute layer aerosol optical depth.
+
+``aod_misr(wavelength, frac="all")``
+   Compute MISR-style layer aerosol optical depth by fraction.
+
+``ssa(wavelength)``
+   Compute mass-weighted single-scattering albedo.
+
 Utility Functions
 -----------------
 

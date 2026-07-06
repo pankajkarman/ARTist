@@ -37,3 +37,17 @@ Value At Plume Top
 .. code-block:: python
 
    temp_at_top = plume.art.value_at_plume_top(ds["z_mc"], ds["temp"])
+
+Optical Diagnostics
+-------------------
+
+Dataset-level optical forward operators are available from ``ds.art``:
+
+.. code-block:: python
+
+   alpha, beta = ds.art.rayleigh_part(532)
+   attenuated = ds.art.att_bsct(532)
+   layer_aod = ds.art.aod(532)
+   column_aod = layer_aod.sum("height")
+   acc_aod = ds.art.aod_misr(532, frac="acc")
+   single_scattering_albedo = ds.art.ssa(532)

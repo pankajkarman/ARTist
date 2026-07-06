@@ -1,2 +1,2 @@
 from .__plot import PlotAccessor
-from .accessor import IconAccessor, GridAccessor, ArtAccessor
+from .accessor import IconAccessor, GridAccessor, ArtDatasetAccessor, ArtAccessor

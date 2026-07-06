@@ -365,7 +365,357 @@ class GridAccessor(object):
             add_colorbar=add_colorbar,
             map_extent=map_extent,
         )
-    
+
+
+@xr.register_dataset_accessor("art")
+class ArtDatasetAccessor(object):
+    """
+    Dataset-level ICON-ART optical diagnostics.
+
+    Accessed as `ds.art` after importing `artist`.
+    """
+
+    _wavelengths = {"355": 0, "532": 1, "1064": 2}
+
+    _lidar_ext = {
+        "insol_acc": np.array([0.89209, 0.97248, 0.9832]),
+        "insol_coa": np.array([0.13508, 0.13881, 0.14692]),
+        "mixed_acc": np.array([1.26710, 1.33489, 1.36351]),
+        "mixed_coa": np.array([0.19576, 0.19838, 0.21014]),
+        "sol_ait": np.array([4.65102, 2.48959, 0.58964]),
+        "sol_acc": np.array([1.23598, 1.31627, 1.19881]),
+    }
+    _lidar_bsc = {
+        "insol_acc": np.array([0.07977, 0.09244, 0.09244]),
+        "insol_coa": np.array([0.00569, 0.00695, 0.0102]),
+        "mixed_acc": np.array([0.11832, 0.12636, 0.12038]),
+        "mixed_coa": np.array([0.00791, 0.01039, 0.01571]),
+        "sol_ait": np.array([0.36542, 0.21806, 0.0836]),
+        "sol_acc": np.array([0.10440, 0.10777, 0.08138]),
+    }
+    _aod_ext = {
+        "insol_acc": np.array([1.49926, 1.60644, 1.79298]),
+        "insol_coa": np.array([0.14943, 0.15129, 0.15459]),
+        "mixed_acc": np.array([6.01615, 4.70122, 1.93800]),
+        "mixed_coa": np.array([0.26428, 0.26733, 0.28390]),
+        "sol_ait": np.array([0.60659, 0.24575, 0.02586]),
+        "sol_acc": np.array([5.00644, 3.06857, 0.70334]),
+    }
+
+    def __init__(self, ds):
+        self._obj = ds
+
+    @classmethod
+    def _wavelength_index(cls, wavelength):
+        key = str(wavelength)
+        if key not in cls._wavelengths:
+            raise ValueError("wavelength must be one of 355, 532, or 1064 nm.")
+        return key, cls._wavelengths[key]
+
+    def _require(self, names):
+        missing = [name for name in names if name not in self._obj]
+        if missing:
+            raise KeyError("Dataset is missing required variables: {}".format(", ".join(missing)))
+
+    def _get_dz(self):
+        z_ifc = self._obj["z_ifc"]
+        height_dim = "height_2" if "height_2" in z_ifc.dims else "height_3"
+        dz = -z_ifc.diff(height_dim).rename({height_dim: "height"})
+        return dz.assign_coords(height=(dz.height - 1))
+
+    @staticmethod
+    def _tau(cross_section, concentration, rho):
+        return cross_section * concentration * rho * 1e-6
+
+    def _has_aerodyn(self):
+        return all(
+            name in self._obj
+            for name in (
+                "ash_mixed_acc",
+                "ash_mixed_coa",
+                "so4_mixed_acc",
+                "so4_mixed_coa",
+                "so4_sol_ait",
+                "so4_sol_acc",
+            )
+        )
+
+    def rayleigh_part(self, wavelength, height_ref=90, scale_height=1.0):
+        """
+        Compute Rayleigh extinction and backscatter coefficients.
+
+        Parameters
+        ----------
+        wavelength : {355, 532, 1064}
+            Wavelength in nanometers.
+        height_ref : scalar, default 90
+            Reference height coordinate used for pressure and temperature.
+        scale_height : float, default 1.0
+            Exponential scaling height in meters, matching the original
+            ICON-ART helper script.
+
+        Returns
+        -------
+        tuple of xarray.DataArray
+            Rayleigh extinction coefficient and backscatter coefficient.
+
+        Examples
+        --------
+        >>> import artist
+        >>> alpha, beta = ds.art.rayleigh_part(532)
+        """
+        wavelength, _ = self._wavelength_index(wavelength)
+        self._require(["pres", "temp", "z_mc"])
+
+        props = {
+            "355": (355e-9, 0.0301, 1.00028570),
+            "532": (532e-9, 0.02, 1.00027819),
+            "1064": (1064e-9, 0.0273, 1.00027397),
+        }
+        ll, dd, ns = props[wavelength]
+        number_density_stp = 2.547e19 / 100**3
+        p0 = 101325.0
+        t0 = 288.15
+
+        ds = self._obj
+        nsr = (
+            number_density_stp
+            * (ds.pres.sel(height=height_ref) / ds.temp.sel(height=height_ref))
+            * np.exp(-ds.z_mc / scale_height)
+        )
+        alpha = (
+            8.0
+            / 3.0
+            * np.pi**3
+            * (ns**2 - 1.0) ** 2
+            / (ll**4 * number_density_stp**2)
+            * (6.0 + 3.0 * dd)
+            / (6.0 - 7.0 * dd)
+            * nsr
+            * t0
+            / p0
+            * ds.pres
+            / ds.temp
+        )
+        beta = 3.0 / (8.0 * np.pi) * alpha
+        return alpha, beta
+
+    def _lidar_ext_bsc(self, idx, spherical_only=False):
+        ds = self._obj
+        self._require(["ash_insol_acc", "ash_insol_coa", "rho"])
+
+        ext = 0
+        bsc = 0
+        if not spherical_only:
+            ext = ext + self._tau(self._lidar_ext["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+            ext = ext + self._tau(self._lidar_ext["insol_coa"][idx], ds.ash_insol_coa, ds.rho)
+            bsc = bsc + self._tau(self._lidar_bsc["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+            bsc = bsc + self._tau(self._lidar_bsc["insol_coa"][idx], ds.ash_insol_coa, ds.rho)
+
+        if self._has_aerodyn():
+            ext = ext + self._tau(
+                self._lidar_ext["mixed_acc"][idx],
+                ds.ash_mixed_acc + ds.so4_mixed_acc,
+                ds.rho,
+            )
+            ext = ext + self._tau(
+                self._lidar_ext["mixed_coa"][idx],
+                ds.ash_mixed_coa + ds.so4_mixed_coa,
+                ds.rho,
+            )
+            ext = ext + self._tau(self._lidar_ext["sol_ait"][idx], ds.so4_sol_ait, ds.rho)
+            ext = ext + self._tau(self._lidar_ext["sol_acc"][idx], ds.so4_sol_acc, ds.rho)
+            bsc = bsc + self._tau(
+                self._lidar_bsc["mixed_acc"][idx],
+                ds.ash_mixed_acc + ds.so4_mixed_acc,
+                ds.rho,
+            )
+            bsc = bsc + self._tau(
+                self._lidar_bsc["mixed_coa"][idx],
+                ds.ash_mixed_coa + ds.so4_mixed_coa,
+                ds.rho,
+            )
+            bsc = bsc + self._tau(self._lidar_bsc["sol_ait"][idx], ds.so4_sol_ait, ds.rho)
+            bsc = bsc + self._tau(self._lidar_bsc["sol_acc"][idx], ds.so4_sol_acc, ds.rho)
+        elif spherical_only:
+            ext = ext + self._tau(self._lidar_ext["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+            ext = ext + self._tau(self._lidar_ext["insol_coa"][idx], ds.ash_insol_coa, ds.rho)
+            bsc = bsc + self._tau(self._lidar_bsc["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+            bsc = bsc + self._tau(self._lidar_bsc["insol_coa"][idx], ds.ash_insol_coa, ds.rho)
+        return ext, bsc
+
+    def att_bsct(self, wavelength):
+        """
+        Compute attenuated backscatter for aerosol tracers.
+
+        Parameters
+        ----------
+        wavelength : {355, 532, 1064}
+            Wavelength in nanometers.
+
+        Examples
+        --------
+        >>> import artist
+        >>> attenuated = ds.art.att_bsct(532)
+        """
+        _, idx = self._wavelength_index(wavelength)
+        ext, bsc = self._lidar_ext_bsc(idx, spherical_only=False)
+        ext_sum = (ext * self._get_dz()).cumsum(dim="height")
+        return bsc * np.exp(-2.0 * ext_sum)
+
+    def att_bsct_sph(self, wavelength):
+        """
+        Compute attenuated backscatter using spherical aerosol fractions.
+
+        Examples
+        --------
+        >>> import artist
+        >>> attenuated = ds.art.att_bsct_sph(532)
+        """
+        _, idx = self._wavelength_index(wavelength)
+        ext, bsc = self._lidar_ext_bsc(idx, spherical_only=True)
+        ext_sum = (ext * self._get_dz()).cumsum(dim="height")
+        return bsc * np.exp(-2.0 * ext_sum)
+
+    def aod(self, wavelength):
+        """
+        Compute layer aerosol optical depth.
+
+        Parameters
+        ----------
+        wavelength : {355, 532, 1064}
+            Wavelength in nanometers.
+
+        Examples
+        --------
+        >>> import artist
+        >>> layer_aod = ds.art.aod(532)
+        >>> column_aod = layer_aod.sum("height")
+        """
+        _, idx = self._wavelength_index(wavelength)
+        ds = self._obj
+        self._require(["ash_insol_acc", "ash_insol_coa", "rho"])
+
+        ext = self._tau(self._aod_ext["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+        ext = ext + self._tau(self._aod_ext["insol_coa"][idx], ds.ash_insol_coa, ds.rho)
+
+        if self._has_aerodyn():
+            ext = ext + self._tau(self._aod_ext["mixed_acc"][idx], ds.ash_mixed_acc + ds.so4_mixed_acc, ds.rho)
+            ext = ext + self._tau(self._aod_ext["mixed_coa"][idx], ds.ash_mixed_coa + ds.so4_mixed_coa, ds.rho)
+            ext = ext + self._tau(self._aod_ext["sol_ait"][idx], ds.so4_sol_ait, ds.rho)
+            ext = ext + self._tau(self._aod_ext["sol_acc"][idx], ds.so4_sol_acc, ds.rho)
+        elif "so4_sol_ait" in ds and "so4_sol_acc" in ds:
+            ext = ext + self._tau(self._aod_ext["sol_ait"][idx], ds.so4_sol_ait, ds.rho)
+            ext = ext + self._tau(self._aod_ext["sol_acc"][idx], ds.so4_sol_acc, ds.rho)
+
+        return ext * self._get_dz()
+
+    def aod_misr(self, wavelength, frac="all"):
+        """
+        Compute MISR-style layer aerosol optical depth by fraction.
+
+        Parameters
+        ----------
+        wavelength : {355, 532, 1064}
+            Wavelength in nanometers.
+        frac : {"all", "ait", "acc", "insol", "mixed", "sol"}, default "all"
+            Aerosol fraction to include.
+
+        Examples
+        --------
+        >>> import artist
+        >>> acc_aod = ds.art.aod_misr(532, frac="acc")
+        """
+        _, idx = self._wavelength_index(wavelength)
+        ds = self._obj
+        self._require(["rho"])
+        frac = frac.lower()
+
+        if frac == "all":
+            self._require(["ash_insol_acc", "ash_mixed_acc", "so4_mixed_acc", "so4_sol_ait", "so4_sol_acc"])
+            ext = self._tau(self._aod_ext["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+            ext = ext + self._tau(self._aod_ext["mixed_acc"][idx], ds.ash_mixed_acc + ds.so4_mixed_acc, ds.rho)
+            ext = ext + self._tau(self._aod_ext["sol_ait"][idx], ds.so4_sol_ait, ds.rho)
+            ext = ext + self._tau(self._aod_ext["sol_acc"][idx], ds.so4_sol_acc, ds.rho)
+        elif frac == "ait":
+            self._require(["so4_sol_ait"])
+            ext = self._tau(self._aod_ext["sol_ait"][idx], ds.so4_sol_ait, ds.rho)
+        elif frac == "acc":
+            self._require(["ash_insol_acc", "ash_mixed_acc", "so4_mixed_acc", "so4_sol_acc"])
+            ext = self._tau(self._aod_ext["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+            ext = ext + self._tau(self._aod_ext["mixed_acc"][idx], ds.ash_mixed_acc + ds.so4_mixed_acc, ds.rho)
+            ext = ext + self._tau(self._aod_ext["sol_acc"][idx], ds.so4_sol_acc, ds.rho)
+        elif frac == "insol":
+            self._require(["ash_insol_acc"])
+            ext = self._tau(self._aod_ext["insol_acc"][idx], ds.ash_insol_acc, ds.rho)
+        elif frac == "mixed":
+            self._require(["ash_mixed_acc", "so4_mixed_acc"])
+            ext = self._tau(self._aod_ext["mixed_acc"][idx], ds.ash_mixed_acc + ds.so4_mixed_acc, ds.rho)
+        elif frac == "sol":
+            self._require(["so4_sol_ait", "so4_sol_acc"])
+            ext = self._tau(self._aod_ext["sol_ait"][idx], ds.so4_sol_ait, ds.rho)
+            ext = ext + self._tau(self._aod_ext["sol_acc"][idx], ds.so4_sol_acc, ds.rho)
+        else:
+            raise ValueError("frac must be one of 'all', 'ait', 'acc', 'insol', 'mixed', or 'sol'.")
+
+        return ext * self._get_dz()
+
+    def ssa(self, wavelength):
+        """
+        Compute mass-weighted single-scattering albedo.
+
+        Only 532 nm is implemented in the source optical-property table.
+
+        Examples
+        --------
+        >>> import artist
+        >>> single_scattering_albedo = ds.art.ssa(532)
+        """
+        wavelength, idx = self._wavelength_index(wavelength)
+        if wavelength != "532":
+            raise ValueError("SSA is currently implemented only for 532 nm.")
+
+        ds = self._obj
+        self._require(
+            [
+                "ash_insol_acc",
+                "ash_insol_coa",
+                "ash_mixed_acc",
+                "ash_mixed_coa",
+                "so4_mixed_acc",
+                "so4_mixed_coa",
+                "so4_sol_ait",
+                "so4_sol_acc",
+            ]
+        )
+        ssa = {
+            "insol_acc": np.array([0.0, 0.98669, 0.0]),
+            "insol_coa": np.array([0.0, 0.90148, 0.0]),
+            "mixed_acc": np.array([0.0, 0.99619, 0.0]),
+            "mixed_coa": np.array([0.0, 0.93797, 0.0]),
+            "sol_ait": np.array([0.0, 1.000000, 0.0]),
+            "sol_acc": np.array([0.0, 1.000000, 0.0]),
+        }
+        mass_total = (
+            ds.ash_insol_acc
+            + ds.ash_insol_coa
+            + ds.ash_mixed_acc
+            + ds.ash_mixed_coa
+            + ds.so4_mixed_acc
+            + ds.so4_mixed_coa
+            + ds.so4_sol_ait
+            + ds.so4_sol_acc
+        )
+        return (
+            ssa["insol_acc"][idx] * ds.ash_insol_acc / mass_total
+            + ssa["mixed_acc"][idx] * (ds.so4_mixed_acc + ds.ash_mixed_acc) / mass_total
+            + ssa["sol_ait"][idx] * ds.so4_sol_ait / mass_total
+            + ssa["sol_acc"][idx] * ds.so4_sol_acc / mass_total
+            + ssa["insol_coa"][idx] * ds.ash_insol_coa / mass_total
+            + ssa["mixed_coa"][idx] * (ds.so4_mixed_coa + ds.ash_mixed_coa) / mass_total
+        )
+
+
 @xr.register_dataarray_accessor('art')
 class ArtAccessor(object):
     """

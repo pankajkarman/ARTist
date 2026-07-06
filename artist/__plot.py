@@ -9,12 +9,53 @@ from matplotlib.collections import PolyCollection
 
 from .utils import add_grid
 
+"""
+Plotting implementations used by the xarray accessors.
+
+Functions in this module intentionally accept an accessor instance as their
+first argument. Public methods in `accessor.py` forward to these functions so
+that notebook tab completion still sees normal methods on `ds.icon`, `da.icon`,
+and `da.art`.
+"""
+
 @xr.register_dataarray_accessor('viz')
 class PlotAccessor(object):
+    """
+    Lightweight plotting accessor for DataArrays with `clon`/`clat` coordinates.
+
+    Accessed as `da.viz` after importing `artist`.
+    """
+
     def __init__(self, da):
         self._obj = da
     
     def tricontourf(self, ax, cmap='coolwarm', levels=10, add_colorbar=True, map_extent=None, projection=None):
+        """
+        Draw a triangular contour plot from native lon/lat cell centers.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Target axes. May be a Cartopy GeoAxes.
+        cmap : str or Colormap, default "coolwarm"
+            Matplotlib colormap.
+        levels : int or sequence, default 10
+            Contour levels passed to `Axes.tricontourf`.
+        add_colorbar : bool, default True
+            If True, add a colorbar to the current figure.
+        map_extent : sequence, optional
+            Reserved for future extent handling.
+        projection : cartopy.crs.Projection, optional
+            Projection used to transform `clon`/`clat`.
+
+        Examples
+        --------
+        >>> import matplotlib.pyplot as plt
+        >>> import cartopy.crs as ccrs
+        >>> import artist
+        >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+        >>> da.viz.tricontourf(ax, projection=ccrs.Robinson())
+        """
         if projection:
             if projection == ccrs.PlateCarree():
                 tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)
@@ -48,7 +89,26 @@ class PlotAccessor(object):
 
 def show_slice_line(self, points, gridpoints, grid_stride=5):
     """
-    Show where the vertical slice is and which gridpoints are used.
+    Show a vertical-slice path and the matching native gridpoints.
+
+    Parameters
+    ----------
+    self : IconAccessor
+        Dataset accessor carrying `clon` and `clat` attributes.
+    points : array-like
+        Lon/lat points defining the requested slice line.
+    gridpoints : array-like
+        Native ICON cell indices selected for the slice.
+    grid_stride : int, default 5
+        Plot every nth native gridpoint in the background.
+
+    Examples
+    --------
+    >>> import artist
+    >>> ds.icon.add_grid("icon_grid.nc")
+    >>> points = [[13.0, 52.0], [14.0, 53.0]]
+    >>> gridpoints = ds.icon.nearest_gridpoints(points)
+    >>> ds.icon.show_slice_line(points, gridpoints)
     """
     points = np.asarray(points)
     gridpoints = np.asarray(gridpoints, dtype=int)
@@ -78,6 +138,27 @@ def show_slice_line(self, points, gridpoints, grid_stride=5):
 
 
 def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
+    """
+    Build native-cell triangle vertices and RGBA colors for plotting.
+
+    Parameters
+    ----------
+    self : GridAccessor
+        DataArray accessor for the field to color.
+    gridfile : str or path-like
+        ICON grid file matching the DataArray cell order.
+    cmap : str or Colormap, optional
+        Colormap. Defaults to `matplotlib.cm.viridis`.
+    vrange : sequence, optional
+        Two-value color normalization range.
+    ltranslon : bool, default True
+        If True, transform longitudes to [0, 360].
+
+    Examples
+    --------
+    >>> import artist
+    >>> triangles, colors, cmap = da.icon.tri_data("icon_grid.nc")
+    """
     cmap = cmap or cm.viridis
     if len(vrange) > 0:
         norm = mpl.colors.Normalize(vmin=vrange[0], vmax=vrange[-1])
@@ -92,6 +173,35 @@ def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
 
 
 def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
+    """
+    Plot a DataArray on ICON native triangular cells.
+
+    Parameters
+    ----------
+    self : GridAccessor
+        DataArray accessor for the field to plot.
+    gridfile : str or path-like
+        ICON grid file matching the DataArray cell order.
+    ax : matplotlib.axes.Axes
+        Target axes.
+    cmap : str or Colormap, optional
+        Colormap. Defaults to `matplotlib.cm.viridis`.
+    vrange : sequence, optional
+        Two-value color normalization range.
+    ltranslon : bool, default False
+        If True, transform longitudes to [0, 360].
+    add_colorbar : bool, default True
+        If True, add a colorbar.
+    map_extent : sequence, optional
+        `[lon_min, lon_max, lat_min, lat_max]` plot extent.
+
+    Examples
+    --------
+    >>> import matplotlib.pyplot as plt
+    >>> import artist
+    >>> fig, ax = plt.subplots()
+    >>> da.icon.tri_plot("icon_grid.nc", ax)
+    """
     triangles, colors, cmp = self.tri_data(gridfile, cmap=cmap, vrange=vrange, ltranslon=ltranslon)
     coll = PolyCollection(triangles, facecolor=colors, closed=True, edgecolor="face")
     ax.add_collection(coll, autolim=True)
@@ -111,6 +221,29 @@ def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colo
 
 
 def plot_hov(self, height, gridpoints, start_t=0, end_t=100, levels=80, point_size=90):
+    """
+    Plot a time-height view for one native gridpoint.
+
+    Parameters
+    ----------
+    self : ArtAccessor
+        DataArray accessor for the tracer field.
+    height : xarray.DataArray
+        Height field with `time`, `height`, and `ncells` dimensions.
+    gridpoints : int or array-like
+        Native cell index. If array-like, the first value is used.
+    start_t, end_t : int
+        Time-index range passed to `isel`.
+    levels : int or sequence, default 80
+        Contour levels passed to `tricontourf`.
+    point_size : float, default 90
+        Scatter marker size.
+
+    Examples
+    --------
+    >>> import artist
+    >>> da.art.plot_hov(ds["z_mc"], 42, start_t=0, end_t=24)
+    """
     timesteps_expanded, y_axis, pollbetu, timesteps, ground = self.make_slice_time(
         height, gridpoints, start_t=start_t, end_t=end_t
     )
@@ -136,6 +269,35 @@ def plot_hov(self, height, gridpoints, start_t=0, end_t=100, levels=80, point_si
     return
 
 def plot_slice(self, height, gridpoints, t, deg_E_start, deg_E_end, deg_N, n=4000, levels=80, point_size=35):
+    """
+    Plot a vertical tracer slice along selected native gridpoints.
+
+    Parameters
+    ----------
+    self : ArtAccessor
+        DataArray accessor for the tracer field.
+    height : xarray.DataArray
+        Height field with `time`, `height`, and `ncells` dimensions.
+    gridpoints : array-like
+        Native ICON cell indices along the slice.
+    t : int
+        Time index passed to `isel`.
+    deg_E_start, deg_E_end : float
+        Longitude labels used for the x-axis.
+    deg_N : float
+        Latitude label used in the title.
+    n : int, default 4000
+        Horizontal spacing scale used for plotting.
+    levels : int or sequence, default 80
+        Contour levels passed to `tricontourf`.
+    point_size : float, default 35
+        Scatter marker size.
+
+    Examples
+    --------
+    >>> import artist
+    >>> da.art.plot_slice(ds["z_mc"], gridpoints, t=0, deg_E_start=13, deg_E_end=14, deg_N=52)
+    """
     x_axis, y_axis, dust, x_data, ground, t = self.make_slice(height, gridpoints, t)
     x_scaled = x_axis * n
     vmax = np.nanmax(dust)
@@ -161,10 +323,26 @@ def plot_slice(self, height, gridpoints, t, deg_E_start, deg_E_end, deg_N, n=400
 
 def quick_plot(self, gridfile=None, cmap="coolwarm", levels=10, projection=None):
     """
-    Original quick map, with optional gridfile.
+    Quickly plot a DataArray on a Cartopy map.
 
-    If the DataArray already has `clon` and `clat` coordinates, `gridfile`
-    is not needed. Otherwise pass the ICON grid file as before.
+    Parameters
+    ----------
+    self : ArtAccessor
+        DataArray accessor for the field to plot.
+    gridfile : str or path-like, optional
+        ICON grid file. Required when the DataArray has no `clon`/`clat`
+        coordinates.
+    cmap : str or Colormap, default "coolwarm"
+        Matplotlib colormap.
+    levels : int or sequence, default 10
+        Contour levels passed to `tricontourf`.
+    projection : cartopy.crs.Projection, optional
+        Map projection. Defaults to Robinson.
+
+    Examples
+    --------
+    >>> import artist
+    >>> ax = da.art.quick_plot(gridfile="icon_grid.nc")
     """
     projection = projection or ccrs.Robinson()
     rad2deg = 180.0 / np.pi

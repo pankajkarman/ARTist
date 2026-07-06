@@ -77,7 +77,8 @@ def show_slice_line(self, points, gridpoints, grid_stride=5):
     return ax
 
 
-def tri_data(self, gridfile, cmap=cm.viridis, vrange=[], ltranslon=True):
+def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
+    cmap = cmap or cm.viridis
     if len(vrange) > 0:
         norm = mpl.colors.Normalize(vmin=vrange[0], vmax=vrange[-1])
     else:
@@ -90,7 +91,7 @@ def tri_data(self, gridfile, cmap=cm.viridis, vrange=[], ltranslon=True):
     return triangles, colors, cmp
 
 
-def tri_plot(self, gridfile, ax, cmap=cm.viridis, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
+def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
     triangles, colors, cmp = self.tri_data(gridfile, cmap=cmap, vrange=vrange, ltranslon=ltranslon)
     coll = PolyCollection(triangles, facecolor=colors, closed=True, edgecolor="face")
     ax.add_collection(coll, autolim=True)

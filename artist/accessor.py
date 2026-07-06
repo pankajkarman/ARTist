@@ -84,7 +84,8 @@ class IconAccessor(object):
                 out[start:stop] = np.argmin(np.einsum("ijk,ijk->ij", diff, diff), axis=1)
             return out
 
-    show_slice_line = _show_slice_line
+    def show_slice_line(self, points, gridpoints, grid_stride=5):
+        return _show_slice_line(self, points, gridpoints, grid_stride=grid_stride)
 
         
 @xr.register_dataarray_accessor('icon')
@@ -99,8 +100,20 @@ class GridAccessor(object):
         nda = xr.DataArray(nda, dims=['Longitude', 'Latitude'], coords=[lon, lat])   
         return nda.T
 
-    tri_data = _tri_data
-    tri_plot = _tri_plot
+    def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
+        return _tri_data(self, gridfile, cmap=cmap, vrange=vrange, ltranslon=ltranslon)
+
+    def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
+        return _tri_plot(
+            self,
+            gridfile,
+            ax,
+            cmap=cmap,
+            vrange=vrange,
+            ltranslon=ltranslon,
+            add_colorbar=add_colorbar,
+            map_extent=map_extent,
+        )
     
 @xr.register_dataarray_accessor('art')
 class ArtAccessor(object):
@@ -190,7 +203,16 @@ class ArtAccessor(object):
         ground = height.isel(height=-1, ncells=gridpoint, time=start_t).values
         return timesteps_expanded, y_axis, dust, timesteps, ground
 
-    plot_hov = _plot_hov
+    def plot_hov(self, height, gridpoints, start_t=0, end_t=100, levels=80, point_size=90):
+        return _plot_hov(
+            self,
+            height,
+            gridpoints,
+            start_t=start_t,
+            end_t=end_t,
+            levels=levels,
+            point_size=point_size,
+        )
 
     def make_slice(self, height, gridpoints, t, height_level_max=30):
         """
@@ -209,6 +231,19 @@ class ArtAccessor(object):
         ground = height.isel(ncells=gridpoints, time=t, height=-1).values
         return x_axis, y_axis, dust, x_data, ground, t
 
-    plot_slice = _plot_slice
+    def plot_slice(self, height, gridpoints, t, deg_E_start, deg_E_end, deg_N, n=4000, levels=80, point_size=35):
+        return _plot_slice(
+            self,
+            height,
+            gridpoints,
+            t,
+            deg_E_start,
+            deg_E_end,
+            deg_N,
+            n=n,
+            levels=levels,
+            point_size=point_size,
+        )
 
-    quick_plot = _quick_plot
+    def quick_plot(self, gridfile=None, cmap="coolwarm", levels=10, projection=None):
+        return _quick_plot(self, gridfile=gridfile, cmap=cmap, levels=levels, projection=projection)

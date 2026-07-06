@@ -12,7 +12,6 @@ release = "0.0.1"
 
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
 ]
@@ -20,7 +19,6 @@ extensions = [
 if find_spec("sphinx_copybutton"):
     extensions.append("sphinx_copybutton")
 
-autosummary_generate = True
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
 napoleon_google_docstring = False
@@ -40,7 +38,7 @@ autodoc_mock_imports = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = []
+exclude_patterns = ["generated/*"]
 
 has_pydata_theme = find_spec("pydata_sphinx_theme") is not None
 html_theme = "pydata_sphinx_theme" if has_pydata_theme else "alabaster"

@@ -187,6 +187,62 @@ class IconAccessor(object):
                 out[start:stop] = np.argmin(np.einsum("ijk,ijk->ij", diff, diff), axis=1)
             return out
 
+    def sellonlat(self, lonmin, lonmax, latmin, latmax, lon="clon", lat="clat"):
+        """
+        Select native ICON cells inside a longitude/latitude box.
+
+        This is the accessor version of the ``sellonlat`` helper used in the
+        analysis scripts. The dataset must already contain center coordinates,
+        either from the original file or from ``ds.icon.add_grid(...)``.
+
+        Parameters
+        ----------
+        lonmin, lonmax, latmin, latmax : float
+            Selection bounds in degrees.
+        lon, lat : str, default "clon", "clat"
+            Coordinate or variable names containing cell-center longitude and
+            latitude in degrees.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset restricted to cells inside the bounding box.
+
+        Examples
+        --------
+        >>> import artist
+        >>> ds.icon.add_grid("icon_grid.nc")
+        >>> regional = ds.icon.sellonlat(-100, 40, -20, 60)
+        """
+        missing = [name for name in (lon, lat) if name not in self._obj]
+        if missing:
+            raise KeyError(
+                "Dataset is missing {}. Call ds.icon.add_grid(...) or provide lon/lat names.".format(
+                    ", ".join(missing)
+                )
+            )
+
+        mask = (
+            (self._obj[lon] > lonmin)
+            & (self._obj[lon] < lonmax)
+            & (self._obj[lat] > latmin)
+            & (self._obj[lat] < latmax)
+        )
+        return self._obj.where(mask, drop=True)
+
+    def sel_lonlat(self, lonmin, lonmax, latmin, latmax, lon="clon", lat="clat"):
+        """
+        Select native ICON cells inside a longitude/latitude box.
+
+        This is a more xarray-style alias for ``sellonlat``.
+
+        Examples
+        --------
+        >>> import artist
+        >>> regional = ds.icon.sel_lonlat(-100, 40, -20, 60)
+        """
+        return self.sellonlat(lonmin, lonmax, latmin, latmax, lon=lon, lat=lat)
+
     def show_slice_line(self, points, gridpoints, grid_stride=5):
         """
         Plot a vertical-slice path and the selected native gridpoints.
@@ -407,6 +463,22 @@ class ArtDatasetAccessor(object):
         "sol_ait": np.array([0.60659, 0.24575, 0.02586]),
         "sol_acc": np.array([5.00644, 3.06857, 0.70334]),
     }
+    _saod_wavelengths = {"355": 0, "532": 1, "1064": 2, "8547": 3}
+    _saod_ext = {
+        "sol_ait": np.array([0.60659, 0.24575, 0.02586, 0.39568]),
+        "sol_acc": np.array([5.00644, 3.06857, 0.70334, 0.40169]),
+    }
+    _component_density = {
+        "dust": 2.65e3,
+        "na": 2.2e3,
+        "cl": 2.2e3,
+        "soot": 1.3e3,
+        "ash": 2.65e3,
+        "h2o": 1.0e3,
+        "so4": 1.8e3,
+        "nh4": 1.8e3,
+        "no3": 1.8e3,
+    }
 
     def __init__(self, ds):
         self._obj = ds
@@ -445,6 +517,263 @@ class ArtDatasetAccessor(object):
                 "so4_sol_acc",
             )
         )
+
+    @classmethod
+    def _saod_wavelength_index(cls, wavelength):
+        key = str(wavelength)
+        if key not in cls._saod_wavelengths:
+            raise ValueError("wavelength must be one of 355, 532, 1064, or 8547 nm.")
+        return cls._saod_wavelengths[key]
+
+    def _dataarray_or_var(self, tracer):
+        if isinstance(tracer, str):
+            self._require([tracer])
+            return self._obj[tracer]
+        return tracer
+
+    @staticmethod
+    def _mode_moment(diameter, number, rho, sigma, moment):
+        exponent = 0.5 * moment**2 * np.log(sigma) ** 2
+        return (diameter / 2.0) ** moment * number * rho * np.exp(exponent)
+
+    def vmr_to_du(self, tracer, pres=None, temp=None, dz=None):
+        """
+        Convert a volume mixing ratio profile to Dobson units.
+
+        Parameters
+        ----------
+        tracer : str or xarray.DataArray
+            VMR field to integrate over height.
+        pres, temp, dz : xarray.DataArray, optional
+            Pressure, temperature, and layer thickness. If omitted, ``pres``
+            and ``temp`` are read from the dataset and ``dz`` is computed from
+            ``z_ifc``.
+
+        Examples
+        --------
+        >>> import artist
+        >>> so2_du = ds.art.vmr_to_du("TRSO2_chemtr")
+        """
+        tr = self._dataarray_or_var(tracer)
+        pres = self._obj["pres"] if pres is None else pres
+        temp = self._obj["temp"] if temp is None else temp
+        dz = self._get_dz() if dz is None else dz
+        column = (tr * pres / (8.314472 * temp)) * dz
+        column = column * 6.02214076e23 / 2.69e20
+        return column.sum("height")
+
+    def plume_mass(self, var, thres_var, thres, cell_area=None, dz=None, molar_frac=1.0):
+        """
+        Compute total tracer mass inside a threshold-defined plume.
+
+        Parameters
+        ----------
+        var : str
+            Tracer variable to integrate. ``"OH"`` follows the OH conversion
+            used in the source script.
+        thres_var : str
+            Variable used to define plume pixels.
+        thres : float
+            Threshold; cells with ``ds[thres_var] >= thres`` are included.
+        cell_area, dz : xarray.DataArray, optional
+            Cell area and layer thickness. Defaults are ``ds.cell_area`` and
+            ``ds.art``'s layer-thickness calculation.
+        molar_frac : float, default 1.0
+            Multiplicative molar fraction applied to non-OH tracers.
+
+        Examples
+        --------
+        >>> import artist
+        >>> mass = ds.art.plume_mass("ash_mixed_acc", "ash_mixed_acc", 0.1)
+        """
+        self._require([thres_var, "rho"])
+        cell_area = self._obj["cell_area"] if cell_area is None else cell_area
+        dz = self._get_dz() if dz is None else dz
+        threshold = self._obj[thres_var] >= thres
+
+        if var == "OH":
+            self._require(["OH_Nconc", "pres", "temp"])
+            vmr_to_number_conc = (6.02214086e23 * self._obj.pres) / (8.314409 * self._obj.temp) * 1e-6
+            cut_plume = (self._obj.OH_Nconc / vmr_to_number_conc).where(threshold) * 17.008 / 28.97
+        else:
+            self._require([var])
+            cut_plume = self._obj[var].where(threshold) * molar_frac
+
+        plume_load = (cut_plume * self._obj.rho * dz).sum("height")
+        return (plume_load * cell_area).sum("ncells")
+
+    def density(self, components):
+        """
+        Compute particle density by mass-weighted component density.
+
+        Parameters
+        ----------
+        components : sequence of str
+            Component variable names such as ``["so4_mixed_acc", "h2o_mixed_acc"]``.
+
+        Examples
+        --------
+        >>> import artist
+        >>> shell_density = ds.art.density(["so4_mixed_acc", "no3_mixed_acc", "h2o_mixed_acc"])
+        """
+        components = list(components)
+        self._require(components)
+        total = self._obj[components].to_array(dim="component").sum("component")
+        density = 0
+        for name in components:
+            particle = name.split("_")[0]
+            if particle not in self._component_density:
+                raise ValueError("No default density is available for component {!r}.".format(particle))
+            density = density + self._component_density[particle] * self._obj[name]
+        return density / total
+
+    def coating_fraction(self):
+        """
+        Compute ash core diameter fractions for mixed accumulation and coarse modes.
+
+        Returns
+        -------
+        tuple of xarray.DataArray
+            Accumulation-mode fraction, coarse-mode fraction, and ash-mass
+            weighted total fraction.
+
+        Examples
+        --------
+        >>> import artist
+        >>> dcdt_acc, dcdt_coa, dcdt = ds.art.coating_fraction()
+        """
+        self._require(
+            [
+                "ash_mixed_acc",
+                "so4_mixed_acc",
+                "no3_mixed_acc",
+                "h2o_mixed_acc",
+                "ash_mixed_coa",
+                "so4_mixed_coa",
+                "no3_mixed_coa",
+                "h2o_mixed_coa",
+            ]
+        )
+        ds = self._obj
+        fw_acc = ds.ash_mixed_acc / (ds.ash_mixed_acc + ds.so4_mixed_acc + ds.no3_mixed_acc + ds.h2o_mixed_acc)
+        fw_coa = ds.ash_mixed_coa / (ds.ash_mixed_coa + ds.so4_mixed_coa + ds.no3_mixed_coa + ds.h2o_mixed_coa)
+
+        dens_core_acc = self.density(["ash_mixed_acc"])
+        dens_shell_acc = self.density(["so4_mixed_acc", "no3_mixed_acc", "h2o_mixed_acc"])
+        fv_acc = fw_acc / (fw_acc + (1.0 - fw_acc) * dens_core_acc / dens_shell_acc)
+        dcdt_acc = np.cbrt(fv_acc)
+
+        dens_core_coa = self.density(["ash_mixed_coa"])
+        dens_shell_coa = self.density(["so4_mixed_coa", "no3_mixed_coa", "h2o_mixed_coa"])
+        fv_coa = fw_coa / (fw_coa + (1.0 - fw_coa) * dens_core_coa / dens_shell_coa)
+        dcdt_coa = np.cbrt(fv_coa)
+
+        total_ash = ds.ash_mixed_acc + ds.ash_mixed_coa
+        dcdt = dcdt_acc * ds.ash_mixed_acc / total_ash + dcdt_coa * ds.ash_mixed_coa / total_ash
+        return dcdt_acc, dcdt_coa, dcdt
+
+    def effective_radius(self, kind="all"):
+        """
+        Compute aerosol effective radius for sulfate, ash, or all modes.
+
+        Parameters
+        ----------
+        kind : {"all", "sulfate", "ash"}, default "all"
+            Aerosol modes included in the diagnostic.
+
+        Examples
+        --------
+        >>> import artist
+        >>> r_eff = ds.art.effective_radius("ash")
+        """
+        kind = kind.lower()
+        if kind not in {"all", "sulfate", "ash"}:
+            raise ValueError("kind must be one of 'all', 'sulfate', or 'ash'.")
+
+        ds = self._obj
+        mode_defs = []
+        if kind in {"all", "sulfate"}:
+            self._require(["diam_sol_ait", "nmb_sol_ait", "so4_sol_ait", "diam_sol_acc", "nmb_sol_acc", "so4_sol_acc", "rho"])
+            mode_defs.extend(
+                [
+                    ("diam_sol_ait", "nmb_sol_ait", "so4_sol_ait", 1e-3, 1.7),
+                    ("diam_sol_acc", "nmb_sol_acc", "so4_sol_acc", 1e-1, 2.0),
+                ]
+            )
+        if kind in {"all", "ash"}:
+            self._require(
+                [
+                    "diam_insol_acc",
+                    "nmb_insol_acc",
+                    "ash_insol_acc",
+                    "diam_insol_coa",
+                    "nmb_insol_coa",
+                    "ash_insol_coa",
+                    "diam_mixed_acc",
+                    "nmb_mixed_acc",
+                    "ash_mixed_acc",
+                    "diam_mixed_coa",
+                    "nmb_mixed_coa",
+                    "ash_mixed_coa",
+                    "diam_giant",
+                    "nmb_giant",
+                    "ash_giant",
+                    "rho",
+                ]
+            )
+            mode_defs.extend(
+                [
+                    ("diam_insol_acc", "nmb_insol_acc", "ash_insol_acc", 1e-1, 2.0),
+                    ("diam_insol_coa", "nmb_insol_coa", "ash_insol_coa", 1e0, 2.0),
+                    ("diam_mixed_acc", "nmb_mixed_acc", "ash_mixed_acc", 1e-1, 2.2),
+                    ("diam_mixed_coa", "nmb_mixed_coa", "ash_mixed_coa", 1e0, 2.2),
+                    ("diam_giant", "nmb_giant", "ash_giant", 10.0, 2.0),
+                ]
+            )
+
+        total_volume = 0
+        total_area = 0
+        for diam_name, number_name, mass_name, threshold, sigma in mode_defs:
+            diameter = ds[diam_name].where(ds[mass_name] > threshold)
+            volume = self._mode_moment(diameter, ds[number_name], ds.rho, sigma, 3).fillna(0)
+            area = self._mode_moment(diameter, ds[number_name], ds.rho, sigma, 2).fillna(0)
+            total_volume = total_volume + volume
+            total_area = total_area + area
+
+        return total_volume / total_area
+
+    def reff_sulfate(self):
+        """
+        Compute sulfate effective radius.
+
+        Examples
+        --------
+        >>> import artist
+        >>> r_eff_sulfate = ds.art.reff_sulfate()
+        """
+        return self.effective_radius("sulfate")
+
+    def reff_ash(self):
+        """
+        Compute ash effective radius.
+
+        Examples
+        --------
+        >>> import artist
+        >>> r_eff_ash = ds.art.reff_ash()
+        """
+        return self.effective_radius("ash")
+
+    def reff_all(self):
+        """
+        Compute effective radius over sulfate and ash modes.
+
+        Examples
+        --------
+        >>> import artist
+        >>> r_eff_all = ds.art.reff_all()
+        """
+        return self.effective_radius("all")
 
     def rayleigh_part(self, wavelength, height_ref=90, scale_height=1.0):
         """
@@ -665,6 +994,43 @@ class ArtDatasetAccessor(object):
             raise ValueError("frac must be one of 'all', 'ait', 'acc', 'insol', 'mixed', or 'sol'.")
 
         return ext * self._get_dz()
+
+    def sulfate_aod(self, wavelength):
+        """
+        Compute sulfate-only layer aerosol optical depth.
+
+        Parameters
+        ----------
+        wavelength : {355, 532, 1064, 8547}
+            Wavelength in nanometers.
+
+        Examples
+        --------
+        >>> import artist
+        >>> sulfate_layer_aod = ds.art.sulfate_aod(532)
+        >>> sulfate_column_aod = sulfate_layer_aod.sum("height")
+        """
+        idx = self._saod_wavelength_index(wavelength)
+        ds = self._obj
+        self._require(["so4_sol_ait", "so4_sol_acc", "rho"])
+        sol_ait = ds.so4_sol_ait.where(ds.so4_sol_ait > 1e-3).fillna(0)
+        sol_acc = ds.so4_sol_acc.where(ds.so4_sol_acc > 1e-1).fillna(0)
+        ext = self._tau(self._saod_ext["sol_ait"][idx], sol_ait, ds.rho)
+        ext = ext + self._tau(self._saod_ext["sol_acc"][idx], sol_acc, ds.rho)
+        return ext * self._get_dz()
+
+    def saod(self, wavelength):
+        """
+        Compute sulfate-only layer aerosol optical depth.
+
+        This script-name alias mirrors ``saod`` from ``for_Dorsa.py``.
+
+        Examples
+        --------
+        >>> import artist
+        >>> sulfate_layer_aod = ds.art.saod(532)
+        """
+        return self.sulfate_aod(wavelength)
 
     def ssa(self, wavelength):
         """

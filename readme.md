@@ -71,6 +71,12 @@ points = [[13.0, 52.0], [14.0, 53.0]]
 gridpoints = ds.icon.nearest_gridpoints(points)
 ```
 
+Select a native-grid regional subset:
+
+```python
+regional = ds.icon.sellonlat(lonmin=-100, lonmax=40, latmin=-20, latmax=60)
+```
+
 Compute vertical layer thickness:
 
 ```python
@@ -179,6 +185,13 @@ Value at plume top:
 temp_at_top = plume.art.value_at_plume_top(ds["z_mc"], ds["temp"])
 ```
 
+Dataset-level plume mass and column diagnostics:
+
+```python
+plume_mass = ds.art.plume_mass("ash_mixed_acc", "ash_mixed_acc", 0.1)
+so2_du = ds.art.vmr_to_du("TRSO2_chemtr")
+```
+
 ## ART Optical Diagnostics
 
 Compute optical forward-operator diagnostics from a full ICON-ART dataset:
@@ -201,4 +214,14 @@ Compute single-scattering albedo:
 
 ```python
 single_scattering_albedo = ds.art.ssa(532)
+```
+
+Compute sulfate-only AOD and effective-radius diagnostics:
+
+```python
+sulfate_aod = ds.art.sulfate_aod(532).sum("height")
+sulfate_aod_8547 = ds.art.saod(8547).sum("height")
+dcdt_acc, dcdt_coa, dcdt = ds.art.coating_fraction()
+r_eff_ash = ds.art.effective_radius("ash")
+r_eff_sulfate = ds.art.reff_sulfate()
 ```

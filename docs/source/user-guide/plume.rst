@@ -31,6 +31,17 @@ Center Of Mass
        dim=("height", "ncells"),
    )
 
+Plume Mass And Columns
+----------------------
+
+Dataset-level helpers adapted from ``for_Dorsa.py`` are available from
+``ds.art``:
+
+.. code-block:: python
+
+   plume_mass = ds.art.plume_mass("ash_mixed_acc", "ash_mixed_acc", 0.1)
+   so2_du = ds.art.vmr_to_du("TRSO2_chemtr")
+
 Value At Plume Top
 ------------------
 
@@ -51,3 +62,13 @@ Dataset-level optical forward operators are available from ``ds.art``:
    column_aod = layer_aod.sum("height")
    acc_aod = ds.art.aod_misr(532, frac="acc")
    single_scattering_albedo = ds.art.ssa(532)
+
+Sulfate-only AOD and aerosol microphysics diagnostics are also available:
+
+.. code-block:: python
+
+   sulfate_aod = ds.art.sulfate_aod(532).sum("height")
+   sulfate_aod_8547 = ds.art.saod(8547).sum("height")
+   dcdt_acc, dcdt_coa, dcdt = ds.art.coating_fraction()
+   r_eff_ash = ds.art.effective_radius("ash")
+   r_eff_sulfate = ds.art.reff_sulfate()

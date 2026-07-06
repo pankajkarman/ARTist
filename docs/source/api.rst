@@ -30,6 +30,12 @@ Dataset accessor: ``ds.icon``
 ``nearest_gridpoints(coordinate)``
    Find nearest ICON native cells for lon/lat coordinates.
 
+``sellonlat(lonmin, lonmax, latmin, latmax, lon="clon", lat="clat")``
+   Select native ICON cells inside a lon/lat box.
+
+``sel_lonlat(lonmin, lonmax, latmin, latmax, lon="clon", lat="clat")``
+   xarray-style alias for ``sellonlat``.
+
 ``show_slice_line(points, gridpoints, grid_stride=5)``
    Plot a vertical slice path and selected gridpoints.
 
@@ -103,6 +109,30 @@ ART dataset accessor: ``ds.art``
 
 ``ds.art`` provides dataset-level ICON-ART optical diagnostics:
 
+``vmr_to_du(tracer, pres=None, temp=None, dz=None)``
+   Convert a volume mixing ratio profile to Dobson units.
+
+``plume_mass(var, thres_var, thres, cell_area=None, dz=None, molar_frac=1.0)``
+   Compute total tracer mass inside a threshold-defined plume.
+
+``density(components)``
+   Compute particle density from mass-weighted component density.
+
+``coating_fraction()``
+   Compute ash core diameter fractions for mixed modes.
+
+``effective_radius(kind="all")``
+   Compute effective radius for sulfate, ash, or all aerosol modes.
+
+``reff_sulfate()``
+   Compute sulfate effective radius.
+
+``reff_ash()``
+   Compute ash effective radius.
+
+``reff_all()``
+   Compute effective radius over sulfate and ash modes.
+
 ``rayleigh_part(wavelength, height_ref=90, scale_height=1.0)``
    Compute Rayleigh extinction and backscatter coefficients.
 
@@ -117,6 +147,12 @@ ART dataset accessor: ``ds.art``
 
 ``aod_misr(wavelength, frac="all")``
    Compute MISR-style layer aerosol optical depth by fraction.
+
+``sulfate_aod(wavelength)``
+   Compute sulfate-only layer aerosol optical depth.
+
+``saod(wavelength)``
+   Script-name alias for ``sulfate_aod``.
 
 ``ssa(wavelength)``
    Compute mass-weighted single-scattering albedo.

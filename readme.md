@@ -27,7 +27,7 @@ pip install git+https://github.com/pankajkarman/ARTist.git
 
 ## Documentation
 
-Latest documentation is available [here](https://pankajkarman.github.io/ArtViz/).
+Latest documentation is available [here](https://pankajkarman.github.io/ARTist/).
 
 
 ## Usage

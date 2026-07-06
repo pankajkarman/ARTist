@@ -3,8 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.cm as cm
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
 from matplotlib.collections import PolyCollection
 
 from .utils import add_grid
@@ -17,6 +15,24 @@ first argument. Public methods in `accessor.py` forward to these functions so
 that notebook tab completion still sees normal methods on `ds.icon`, `da.icon`,
 and `da.art`.
 """
+
+
+def _cartopy():
+    """
+    Import Cartopy only when a map plotting method needs it.
+
+    Keeping Cartopy lazy lets users import `artist` and build the documentation
+    in environments where the optional map plotting dependency is not installed.
+    """
+    try:
+        import cartopy.crs as ccrs
+        import cartopy.feature as cfeature
+    except ImportError as exc:
+        raise ImportError(
+            "Cartopy is required for ARTist map plotting methods. "
+            "Install cartopy to use this plotting function."
+        ) from exc
+    return ccrs, cfeature
 
 @xr.register_dataarray_accessor('viz')
 class PlotAccessor(object):
@@ -56,6 +72,7 @@ class PlotAccessor(object):
         >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
         >>> da.viz.tricontourf(ax, projection=ccrs.Robinson())
         """
+        ccrs, _ = _cartopy()
         if projection:
             if projection == ccrs.PlateCarree():
                 tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)
@@ -117,6 +134,7 @@ def show_slice_line(self, points, gridpoints, grid_stride=5):
 
     plt.figure(figsize=[16, 9], facecolor="white")
 
+    ccrs, cfeature = _cartopy()
     ax = plt.axes(projection=ccrs.PlateCarree())
     ax.stock_img()
     ax.coastlines()
@@ -344,6 +362,7 @@ def quick_plot(self, gridfile=None, cmap="coolwarm", levels=10, projection=None)
     >>> import artist
     >>> ax = da.art.quick_plot(gridfile="icon_grid.nc")
     """
+    ccrs, _ = _cartopy()
     projection = projection or ccrs.Robinson()
     rad2deg = 180.0 / np.pi
 

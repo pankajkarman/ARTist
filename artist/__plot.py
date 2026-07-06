@@ -431,7 +431,33 @@ def show_slice_line(self, points, gridpoints, grid_stride=5):
     return ax
 
 
-def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
+def _dataarray_vertices(da, gridfile=None, ltranslon=False):
+    for lon_name, lat_name in (("vlon", "vlat"), ("clon_vertices", "clat_vertices")):
+        if lon_name in da.coords and lat_name in da.coords:
+            vlon = np.asarray(da.coords[lon_name].values)
+            vlat = np.asarray(da.coords[lat_name].values)
+            break
+    else:
+        if "_artist_vlon" in da.attrs and "_artist_vlat" in da.attrs:
+            vlon = np.asarray(da.attrs["_artist_vlon"])
+            vlat = np.asarray(da.attrs["_artist_vlat"])
+        elif gridfile is not None:
+            _, vlon, vlat, _, _ = add_grid(gridfile, ltranslon=ltranslon)
+            vlon = np.asarray(vlon.values)
+            vlat = np.asarray(vlat.values)
+        else:
+            raise ValueError(
+                "Native-grid vertex coordinates are missing. Call "
+                "ds.icon.add_grid(...) before selecting this DataArray, or pass "
+                "gridfile=... as a fallback."
+            )
+
+    if ltranslon:
+        vlon = (vlon + 360) % 360
+    return vlon, vlat
+
+
+def tri_data(self, gridfile=None, cmap=None, vrange=[], ltranslon=True):
     """
     Build native-cell triangle vertices and RGBA colors for plotting.
 
@@ -439,8 +465,8 @@ def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
     ----------
     self : GridAccessor
         DataArray accessor for the field to color.
-    gridfile : str or path-like
-        ICON grid file matching the DataArray cell order.
+    gridfile : str or path-like, optional
+        Backward-compatible fallback for DataArrays without grid metadata.
     cmap : str or Colormap, optional
         Colormap. Defaults to `matplotlib.cm.viridis`.
     vrange : sequence, optional
@@ -451,7 +477,8 @@ def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
     Examples
     --------
     >>> import artist
-    >>> triangles, colors, cmap = da.icon.tri_data("icon_grid.nc")
+    >>> ds.icon.add_grid("icon_grid.nc")
+    >>> triangles, colors, cmap = ds["ash_mixed_acc"].icon.tri_data()
     """
     cmap = cmap or cm.viridis
     if len(vrange) > 0:
@@ -459,10 +486,10 @@ def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
     else:
         norm = mpl.colors.Normalize(vmin=self._obj.min(), vmax=self._obj.max())
 
-    _, self.vlon, self.vlat, _, _ = add_grid(gridfile, ltranslon=ltranslon)
+    self.vlon, self.vlat = _dataarray_vertices(self._obj, gridfile=gridfile, ltranslon=ltranslon)
     cmp = cm.ScalarMappable(norm=norm, cmap=cmap)
     triangles = np.stack((self.vlon, self.vlat), axis=2)
-    colors = cmp.to_rgba(self._obj)
+    colors = cmp.to_rgba(np.asarray(self._obj.squeeze()).ravel())
     return triangles, colors, cmp
 
 
@@ -474,8 +501,8 @@ def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colo
     ----------
     self : GridAccessor
         DataArray accessor for the field to plot.
-    gridfile : str or path-like
-        ICON grid file matching the DataArray cell order.
+    gridfile : str or path-like, optional
+        Backward-compatible fallback for DataArrays without grid metadata.
     ax : matplotlib.axes.Axes
         Target axes.
     cmap : str or Colormap, optional
@@ -494,7 +521,8 @@ def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colo
     >>> import matplotlib.pyplot as plt
     >>> import artist
     >>> fig, ax = plt.subplots()
-    >>> da.icon.tri_plot("icon_grid.nc", ax)
+    >>> ds.icon.add_grid("icon_grid.nc")
+    >>> ds["ash_mixed_acc"].icon.tri_plot(ax)
     """
     triangles, colors, cmp = self.tri_data(gridfile, cmap=cmap, vrange=vrange, ltranslon=ltranslon)
     coll = PolyCollection(triangles, facecolor=colors, closed=True, edgecolor="face")
@@ -503,7 +531,7 @@ def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colo
     ax.set_ylabel("Latitude")
 
     if add_colorbar:
-        plt.colorbar(cmp)
+        plt.colorbar(cmp, ax=ax)
 
     if map_extent:
         ax.set_xlim([map_extent[0], map_extent[1]])

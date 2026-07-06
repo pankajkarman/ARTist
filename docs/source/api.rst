@@ -53,13 +53,13 @@ DataArray grid accessor: ``da.icon``
 
 ``da.icon`` provides native-grid helpers for individual fields:
 
-``regrid(gridfile, lon, lat, method="linear", ltranslon=True)``
+``regrid(lon, lat, method="linear", ltranslon=True, gridfile=None)``
    Interpolate a native ICON field to a regular lon/lat grid.
 
-``tri_data(gridfile, cmap=None, vrange=[], ltranslon=True)``
+``tri_data(gridfile=None, cmap=None, vrange=[], ltranslon=True)``
    Build native-cell triangle vertices and colors for plotting.
 
-``tri_plot(gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None)``
+``tri_plot(ax, gridfile=None, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None)``
    Plot a field on ICON triangular cells.
 
 DataArray plotting accessor: ``da.viz``

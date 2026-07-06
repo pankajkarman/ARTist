@@ -91,7 +91,7 @@ ash_variables = ds.icon.look_up("ash")
 ## Quick plot
 
 ```python
-ax = da.art.quick_plot(gridfile="icon_grid.nc")
+ax = da.art.quick_plot()
 ```
 
 ![Quick plot](./figs/quick.png)
@@ -134,7 +134,7 @@ import numpy as np
 lon = np.linspace(0, 20, 101)
 lat = np.linspace(40, 60, 81)
 
-regular = da.icon.regrid("icon_grid.nc", lon, lat, method="linear")
+regular = da.icon.regrid(lon, lat, method="linear")
 regular.plot()
 ```
 

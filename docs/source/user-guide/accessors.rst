@@ -24,8 +24,9 @@ Use ``da.icon`` for native-grid operations on a single field:
 
 .. code-block:: python
 
-   regular = da.icon.regrid("icon_grid.nc", lon, lat)
-   triangles, colors, cmap = da.icon.tri_data("icon_grid.nc")
+   da = ds["ash_mixed_acc"]
+   regular = da.icon.regrid(lon, lat)
+   triangles, colors, cmap = da.icon.tri_data()
 
 ART Tracer Accessor: ``da.art``
 -------------------------------

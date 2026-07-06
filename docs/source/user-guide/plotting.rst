@@ -12,7 +12,7 @@ Native Triangular Cells
    import matplotlib.pyplot as plt
 
    fig, ax = plt.subplots(figsize=(12, 6))
-   da.icon.tri_plot("icon_grid.nc", ax)
+   da.icon.tri_plot(ax)
 
 PolyCollection Backend
 ----------------------
@@ -40,7 +40,7 @@ Quick Map
 
 .. code-block:: python
 
-   ax = da.art.quick_plot(gridfile="icon_grid.nc")
+   ax = da.art.quick_plot()
 
 Slice Line
 ----------

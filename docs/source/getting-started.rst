@@ -34,6 +34,7 @@ ARTist registers xarray accessors when imported:
    import artist
 
    ds = xr.open_dataset("icon_art_output.nc")
+   ds.icon.add_grid("icon_grid.nc")
    da = ds["ash_mixed_acc"]
 
 Native-Grid Plot
@@ -46,7 +47,7 @@ Plot a DataArray on native ICON triangular cells:
    import matplotlib.pyplot as plt
 
    fig, ax = plt.subplots(figsize=(12, 6))
-   da.icon.tri_plot("icon_grid.nc", ax)
+   da.icon.tri_plot(ax)
 
 Regrid To A Regular Lon/Lat Grid
 --------------------------------
@@ -60,5 +61,5 @@ Interpolate from native ICON cells to a regular latitude-longitude grid:
    lon = np.linspace(0, 20, 101)
    lat = np.linspace(40, 60, 81)
 
-   regular = da.icon.regrid("icon_grid.nc", lon, lat)
+   regular = da.icon.regrid(lon, lat)
    regular.plot()

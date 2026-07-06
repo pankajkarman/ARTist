@@ -348,21 +348,42 @@ class GridAccessor(object):
 
     def __init__(self, da):
         self._obj = da
-        
-    def regrid(self, gridfile, lon, lat, method='linear', ltranslon=True):
+
+    def _grid_centers(self, gridfile=None, ltranslon=False):
+        if "clon" in self._obj.coords and "clat" in self._obj.coords:
+            clon = np.asarray(self._obj.coords["clon"].values)
+            clat = np.asarray(self._obj.coords["clat"].values)
+        elif gridfile is not None:
+            _, _, _, clon, clat = add_grid(gridfile, ltranslon=ltranslon)
+            clon = np.asarray(clon.values)
+            clat = np.asarray(clat.values)
+        else:
+            raise ValueError(
+                "Native-grid center coordinates are missing. Call "
+                "ds.icon.add_grid(...) before selecting this DataArray, or pass "
+                "gridfile=... as a fallback."
+            )
+
+        if ltranslon:
+            clon = (clon + 360) % 360
+        return clon, clat
+
+    def regrid(self, *args, lon=None, lat=None, method='linear', ltranslon=True, gridfile=None):
         """
         Interpolate a native ICON field to a regular lon/lat grid.
 
         Parameters
         ----------
-        gridfile : str or path-like
-            ICON grid file matching this DataArray's native cell order.
         lon, lat : array-like
             Target longitude and latitude coordinates.
         method : {"linear", "nearest", "cubic"}, default "linear"
             Interpolation method passed to `scipy.interpolate.griddata`.
         ltranslon : bool, default True
-            If True, transform grid longitudes to [0, 360] before regridding.
+            If True, transform native grid longitudes to [0, 360] before
+            regridding.
+        gridfile : str or path-like, optional
+            Backward-compatible fallback for DataArrays that were not selected
+            from a dataset prepared with ``ds.icon.add_grid(...)``.
 
         Returns
         -------
@@ -375,8 +396,22 @@ class GridAccessor(object):
         >>> import artist
         >>> lon = np.linspace(0, 20, 101)
         >>> lat = np.linspace(40, 60, 81)
-        >>> regular = da.icon.regrid("icon_grid.nc", lon, lat)
+        >>> ds.icon.add_grid("icon_grid.nc")
+        >>> regular = ds["ash_mixed_acc"].icon.regrid(lon, lat)
         """
+        if args:
+            if lon is not None or lat is not None:
+                raise TypeError("Pass lon/lat either positionally or by keyword, not both.")
+            if len(args) == 2:
+                lon, lat = args
+            elif len(args) == 3:
+                # Backward compatibility for da.icon.regrid(gridfile, lon, lat).
+                gridfile, lon, lat = args
+            else:
+                raise TypeError("regrid() expects regrid(lon, lat) or regrid(gridfile, lon, lat).")
+        if lon is None or lat is None:
+            raise TypeError("regrid() missing required lon and lat arguments.")
+
         try:
             from scipy.interpolate import griddata
         except ImportError as exc:
@@ -385,13 +420,13 @@ class GridAccessor(object):
                 "DataArray.icon.regrid()."
             ) from exc
 
-        _, _, _, clon, clat = add_grid(gridfile, ltranslon=ltranslon)
+        clon, clat = self._grid_centers(gridfile=gridfile, ltranslon=ltranslon)
         y, x = np.meshgrid(lat, lon)
         nda = griddata((clon, clat), self._obj.squeeze(), (x, y), method=method)
         nda = xr.DataArray(nda, dims=['Longitude', 'Latitude'], coords=[lon, lat])   
         return nda.T
 
-    def tri_data(self, gridfile, cmap=None, vrange=[], ltranslon=True):
+    def tri_data(self, gridfile=None, cmap=None, vrange=[], ltranslon=True):
         """
         Build triangle vertices and colors for native-grid plotting.
 
@@ -400,11 +435,12 @@ class GridAccessor(object):
         Examples
         --------
         >>> import artist
-        >>> triangles, colors, cmap = da.icon.tri_data("icon_grid.nc")
+        >>> ds.icon.add_grid("icon_grid.nc")
+        >>> triangles, colors, cmap = ds["ash_mixed_acc"].icon.tri_data()
         """
         return _tri_data(self, gridfile, cmap=cmap, vrange=vrange, ltranslon=ltranslon)
 
-    def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
+    def tri_plot(self, ax, gridfile=None, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
         """
         Plot this DataArray on ICON native triangular cells.
 
@@ -415,8 +451,13 @@ class GridAccessor(object):
         >>> import matplotlib.pyplot as plt
         >>> import artist
         >>> fig, ax = plt.subplots()
-        >>> da.icon.tri_plot("icon_grid.nc", ax)
+        >>> ds.icon.add_grid("icon_grid.nc")
+        >>> ds["ash_mixed_acc"].icon.tri_plot(ax)
         """
+        if isinstance(ax, (str, bytes)):
+            # Backward compatibility for da.icon.tri_plot(gridfile, ax).
+            gridfile, ax = ax, gridfile
+
         return _tri_plot(
             self,
             gridfile,

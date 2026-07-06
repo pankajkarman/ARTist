@@ -27,4 +27,5 @@ Regrid A DataArray
 
 .. code-block:: python
 
-   regular = ds["ash_mixed_acc"].icon.regrid("icon_grid.nc", lon, lat)
+   ds.icon.add_grid("icon_grid.nc")
+   regular = ds["ash_mixed_acc"].icon.regrid(lon, lat)

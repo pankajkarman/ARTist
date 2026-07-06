@@ -24,11 +24,23 @@ Dataset accessor: ``ds.icon``
 ``look_up(key="mixed")``
    Return dataset variable names containing a search key.
 
+``distance(origin, destination, radius=6371.0)``
+   Compute great-circle distance between lon/lat coordinates.
+
 ``nearest_gridpoints(coordinate)``
    Find nearest ICON native cells for lon/lat coordinates.
 
 ``show_slice_line(points, gridpoints, grid_stride=5)``
    Plot a vertical slice path and selected gridpoints.
+
+``noncyl_xticks(ax, ticks, fontsize=None)``
+   Draw longitude ticks for non-cylindrical Cartopy projections.
+
+``noncyl_yticks(ax, ticks, fontsize=None)``
+   Draw latitude ticks for non-cylindrical Cartopy projections.
+
+``noncyl_gridlines(ax, xticks=None, yticks=None, fontsize=None, **gridline_kwargs)``
+   Draw gridlines and edge ticks for non-cylindrical Cartopy maps.
 
 DataArray grid accessor: ``da.icon``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -85,3 +97,6 @@ Utility Functions
 ``artist.utils.add_grid(gridfile, ltranslon=False)``
    Open an ICON grid file and return converted vertex and cell-center
    coordinates.
+
+``artist.utils.distance(origin, destination, radius=6371.0)``
+   Compute great-circle distance in kilometers.

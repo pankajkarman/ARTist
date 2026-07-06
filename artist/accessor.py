@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd
 
 from .__plot import (
+    noncyl_gridlines as _noncyl_gridlines,
+    noncyl_xticks as _noncyl_xticks,
+    noncyl_yticks as _noncyl_yticks,
     plot_hov as _plot_hov,
     plot_slice as _plot_slice,
     quick_plot as _quick_plot,
@@ -10,7 +13,7 @@ from .__plot import (
     tri_data as _tri_data,
     tri_plot as _tri_plot,
 )
-from .utils import add_grid
+from .utils import add_grid, distance as _distance
 
 @xr.register_dataset_accessor('icon')
 class IconAccessor(object):
@@ -111,6 +114,30 @@ class IconAccessor(object):
         """
         return [vname for vname in self._obj.data_vars if key in vname]
 
+    def distance(self, origin, destination, radius=6371.0):
+        """
+        Compute great-circle distance between lon/lat coordinates.
+
+        Parameters
+        ----------
+        origin, destination : array-like
+            Coordinate pairs in degrees as `[lon, lat]`. Inputs may also be
+            arrays whose last dimension is `(lon, lat)`.
+        radius : float, default 6371.0
+            Spherical Earth radius in kilometers.
+
+        Returns
+        -------
+        float or numpy.ndarray
+            Distance in kilometers.
+
+        Examples
+        --------
+        >>> import artist
+        >>> ds.icon.distance([8.4, 49.0], [13.4, 52.5])
+        """
+        return _distance(origin, destination, radius=radius)
+
     def nearest_gridpoints(self, coordinate):
         """
         Find nearest native ICON cells for lon/lat coordinates.
@@ -170,6 +197,83 @@ class IconAccessor(object):
         >>> ax = ds.icon.show_slice_line(points, gridpoints)
         """
         return _show_slice_line(self, points, gridpoints, grid_stride=grid_stride)
+
+    def noncyl_xticks(self, ax, ticks, fontsize=None):
+        """
+        Draw longitude ticks for a non-cylindrical Cartopy projection.
+
+        Parameters
+        ----------
+        ax : cartopy.mpl.geoaxes.GeoAxes
+            Cartopy axes to modify.
+        ticks : sequence of float
+            Longitude tick labels in degrees.
+        fontsize : float, optional
+            Tick-label font size.
+
+        Examples
+        --------
+        >>> import cartopy.crs as ccrs
+        >>> import matplotlib.pyplot as plt
+        >>> import artist
+        >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+        >>> ds.icon.noncyl_xticks(ax, range(-180, 181, 60))
+        """
+        return _noncyl_xticks(ax, ticks, fontsize=fontsize)
+
+    def noncyl_yticks(self, ax, ticks, fontsize=None):
+        """
+        Draw latitude ticks for a non-cylindrical Cartopy projection.
+
+        Parameters
+        ----------
+        ax : cartopy.mpl.geoaxes.GeoAxes
+            Cartopy axes to modify.
+        ticks : sequence of float
+            Latitude tick labels in degrees.
+        fontsize : float, optional
+            Tick-label font size.
+
+        Examples
+        --------
+        >>> import cartopy.crs as ccrs
+        >>> import matplotlib.pyplot as plt
+        >>> import artist
+        >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+        >>> ds.icon.noncyl_yticks(ax, range(-90, 91, 30))
+        """
+        return _noncyl_yticks(ax, ticks, fontsize=fontsize)
+
+    def noncyl_gridlines(self, ax, xticks=None, yticks=None, fontsize=None, **gridline_kwargs):
+        """
+        Draw gridlines and edge ticks for non-cylindrical Cartopy maps.
+
+        Parameters
+        ----------
+        ax : cartopy.mpl.geoaxes.GeoAxes
+            Cartopy axes to modify.
+        xticks, yticks : sequence of float, optional
+            Longitude and latitude tick labels in degrees.
+        fontsize : float, optional
+            Tick-label font size.
+        **gridline_kwargs
+            Extra keyword arguments passed to `ax.gridlines`.
+
+        Examples
+        --------
+        >>> import cartopy.crs as ccrs
+        >>> import matplotlib.pyplot as plt
+        >>> import artist
+        >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+        >>> ds.icon.noncyl_gridlines(ax, xticks=range(-180, 181, 60), yticks=range(-90, 91, 30))
+        """
+        return _noncyl_gridlines(
+            ax,
+            xticks=xticks,
+            yticks=yticks,
+            fontsize=fontsize,
+            **gridline_kwargs,
+        )
 
         
 @xr.register_dataarray_accessor('icon')

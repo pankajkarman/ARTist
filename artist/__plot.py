@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.cm as cm
+from copy import copy
 from matplotlib.collections import PolyCollection
 
 from .utils import add_grid
@@ -33,6 +34,149 @@ def _cartopy():
             "Install cartopy to use this plotting function."
         ) from exc
     return ccrs, cfeature
+
+
+def _shapely_geometry():
+    try:
+        import shapely.geometry as sgeom
+    except ImportError as exc:
+        raise ImportError(
+            "Shapely is required for non-cylindrical gridline ticks. "
+            "Install shapely to use this plotting function."
+        ) from exc
+    return sgeom
+
+
+def _outline_line(ax):
+    sgeom = _shapely_geometry()
+    if hasattr(ax, "outline_patch"):
+        vertices = ax.outline_patch.get_path().vertices.tolist()
+    else:
+        vertices = ax.spines["geo"].get_path().vertices.tolist()
+    return sgeom.LineString(vertices)
+
+
+def _find_side(line, side):
+    """
+    Return one side of a rectangular Cartopy outline as a LineString.
+    """
+    sgeom = _shapely_geometry()
+    minx, miny, maxx, maxy = line.bounds
+    points = {
+        "left": [(minx, miny), (minx, maxy)],
+        "right": [(maxx, miny), (maxx, maxy)],
+        "bottom": [(minx, miny), (maxx, miny)],
+        "top": [(minx, maxy), (maxx, maxy)],
+    }
+    return sgeom.LineString(points[side])
+
+
+def _noncyl_ticks(ax, ticks, tick_location, line_constructor, tick_extractor, n_steps=30):
+    """
+    Compute visible tick locations for non-cylindrical Cartopy projections.
+    """
+    ccrs, _ = _cartopy()
+    sgeom = _shapely_geometry()
+    axis = _find_side(_outline_line(ax), tick_location)
+    extent = ax.get_extent(ccrs.PlateCarree())
+    locations = []
+
+    for tick in ticks:
+        xy = line_constructor(tick, n_steps, extent)
+        proj_xyz = ax.projection.transform_points(ccrs.Geodetic(), xy[:, 0], xy[:, 1])
+        line = sgeom.LineString(proj_xyz[..., :2].tolist())
+        intersection = axis.intersection(line)
+        if intersection.is_empty:
+            locations.append(None)
+        else:
+            locations.append(tick_extractor(intersection.xy)[0])
+
+    labels = copy(list(ticks))
+    while True:
+        try:
+            index = locations.index(None)
+        except ValueError:
+            break
+        locations.pop(index)
+        labels.pop(index)
+    return locations, labels
+
+
+def noncyl_xticks(ax, ticks, fontsize=None):
+    """
+    Draw longitude ticks on the bottom axis for non-cylindrical projections.
+
+    Examples
+    --------
+    >>> import cartopy.crs as ccrs
+    >>> import matplotlib.pyplot as plt
+    >>> import artist
+    >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+    >>> ds.icon.noncyl_xticks(ax, range(-180, 181, 60))
+    """
+    tick_extractor = lambda xy: xy[0]
+    line_constructor = lambda tick, n, bounds: np.vstack(
+        (np.zeros(n) + tick, np.linspace(bounds[2], bounds[3], n))
+    ).T
+    xticks, labels = _noncyl_ticks(ax, list(ticks), "bottom", line_constructor, tick_extractor)
+    ax.xaxis.tick_bottom()
+    ax.set_xticks(xticks)
+    label_kwargs = {} if fontsize is None else {"fontsize": fontsize}
+    ax.set_xticklabels(
+        [ax.xaxis.get_major_formatter()(label) for label in labels],
+        **label_kwargs,
+    )
+    return ax
+
+
+def noncyl_yticks(ax, ticks, fontsize=None):
+    """
+    Draw latitude ticks on the left axis for non-cylindrical projections.
+
+    Examples
+    --------
+    >>> import cartopy.crs as ccrs
+    >>> import matplotlib.pyplot as plt
+    >>> import artist
+    >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+    >>> ds.icon.noncyl_yticks(ax, range(-90, 91, 30))
+    """
+    tick_extractor = lambda xy: xy[1]
+    line_constructor = lambda tick, n, bounds: np.vstack(
+        (np.linspace(bounds[0], bounds[1], n), np.zeros(n) + tick)
+    ).T
+    yticks, labels = _noncyl_ticks(ax, list(ticks), "left", line_constructor, tick_extractor)
+    ax.yaxis.tick_left()
+    ax.set_yticks(yticks)
+    label_kwargs = {} if fontsize is None else {"fontsize": fontsize}
+    ax.set_yticklabels(
+        [ax.yaxis.get_major_formatter()(label) for label in labels],
+        **label_kwargs,
+    )
+    return ax
+
+
+def noncyl_gridlines(ax, xticks=None, yticks=None, fontsize=None, **gridline_kwargs):
+    """
+    Draw gridlines and visible edge ticks for non-cylindrical Cartopy maps.
+
+    Examples
+    --------
+    >>> import cartopy.crs as ccrs
+    >>> import matplotlib.pyplot as plt
+    >>> import artist
+    >>> fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+    >>> ds.icon.noncyl_gridlines(ax, xticks=range(-180, 181, 60), yticks=range(-90, 91, 30))
+    """
+    ccrs, _ = _cartopy()
+    defaults = {"linestyle": "--", "linewidth": 0.6, "alpha": 0.5}
+    defaults.update(gridline_kwargs)
+    ax.gridlines(crs=ccrs.PlateCarree(), **defaults)
+    if xticks is not None:
+        noncyl_xticks(ax, xticks, fontsize=fontsize)
+    if yticks is not None:
+        noncyl_yticks(ax, yticks, fontsize=fontsize)
+    return ax
 
 @xr.register_dataarray_accessor('viz')
 class PlotAccessor(object):

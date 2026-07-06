@@ -30,6 +30,21 @@ Slice Line
    gridpoints = ds.icon.nearest_gridpoints(points)
    ax = ds.icon.show_slice_line(points, gridpoints)
 
+Non-Cylindrical Gridlines
+-------------------------
+
+.. code-block:: python
+
+   import cartopy.crs as ccrs
+   import matplotlib.pyplot as plt
+
+   fig, ax = plt.subplots(subplot_kw={"projection": ccrs.Robinson()})
+   ds.icon.noncyl_gridlines(
+       ax,
+       xticks=range(-180, 181, 60),
+       yticks=range(-90, 91, 30),
+   )
+
 Vertical Slice
 --------------
 

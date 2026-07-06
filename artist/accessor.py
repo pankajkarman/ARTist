@@ -178,6 +178,50 @@ class ArtAccessor(object):
         """
         return (self._obj * rho * dz).sum("height")
 
+    def select_plume(self, thresh, fill_value=0):
+        """
+        Select plume cells where tracer concentration is above a threshold.
+        """
+        return self._obj.where(self._obj > thresh).fillna(fill_value)
+
+    def plume_center(self, v_cell, z_mc, dim=None, skipna=True):
+        """
+        Height of the plume center of mass.
+        """
+        tracer_mass = self._obj * v_cell
+        weighted_height = tracer_mass * z_mc
+        return weighted_height.sum(dim=dim, skipna=skipna) / tracer_mass.sum(dim=dim, skipna=skipna)
+
+    def plume_top(self, z_mc, height_dim="height", fill_value=0):
+        """
+        Height of the highest plume cell at each horizontal location.
+        """
+        z_plume = z_mc.where(self._obj > 0)
+        return z_plume.max(dim=height_dim).fillna(fill_value)
+
+    def plume_bottom(self, z_mc, height_dim="height", fill_value=0):
+        """
+        Height of the lowest plume cell at each horizontal location.
+        """
+        z_plume = z_mc.where(self._obj > 0)
+        return z_plume.min(dim=height_dim).fillna(fill_value)
+
+    def value_at_plume_top(self, z_mc, val, height_dim="height", fill_value=0):
+        """
+        Value of another field at the plume top.
+        """
+        z_plume = z_mc.where(self._obj > 0)
+        top = z_plume.max(dim=height_dim)
+        return val.where(z_plume == top).max(dim=height_dim).fillna(fill_value)
+
+    def max_conc_height(self, z_mc, height_dim="height", fill_value=0):
+        """
+        Height where plume concentration is maximal.
+        """
+        plume = self._obj.where(self._obj > 0)
+        z_max = z_mc.where(plume == plume.max(dim=height_dim, skipna=True))
+        return z_max.mean(dim=height_dim, skipna=True).fillna(fill_value)
+
     def make_slice_time(self, height, gridpoint, start_t=0, end_t=1, height_level_max=30):
         """
         Build vectorized arrays for a time-height plot at one native gridpoint.

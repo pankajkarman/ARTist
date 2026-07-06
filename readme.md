@@ -56,6 +56,7 @@ ARTist currently registers these accessors:
 
 - `ds.icon`: dataset-level ICON grid helpers
 - `da.icon`: DataArray-level native-grid helpers
+- `ds.art`: dataset-level ART optical diagnostics
 - `da.art`: ART tracer diagnostics
 - `da.viz`: lightweight plotting helper for arrays with `clon`/`clat`
 
@@ -163,4 +164,28 @@ Value at plume top:
 
 ```python
 temp_at_top = plume.art.value_at_plume_top(ds["z_mc"], ds["temp"])
+```
+
+## ART Optical Diagnostics
+
+Compute optical forward-operator diagnostics from a full ICON-ART dataset:
+
+```python
+alpha, beta = ds.art.rayleigh_part(532)
+attenuated = ds.art.att_bsct(532)
+spherical_attenuated = ds.art.att_bsct_sph(532)
+```
+
+Compute layer and column aerosol optical depth:
+
+```python
+layer_aod = ds.art.aod(532)
+column_aod = layer_aod.sum("height")
+accumulation_aod = ds.art.aod_misr(532, frac="acc")
+```
+
+Compute single-scattering albedo:
+
+```python
+single_scattering_albedo = ds.art.ssa(532)
 ```

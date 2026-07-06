@@ -45,6 +45,8 @@ import xarray as xr
 import artist
 
 ds = xr.open_dataset("icon_art_output.nc")
+ds.icon.add_grid("icon_grid.nc")
+
 da = ds["ash_mixed_acc"]
 ```
 
@@ -79,6 +81,28 @@ Find variables by name:
 ```python
 ash_variables = ds.icon.look_up("ash")
 ```
+## Quick plot
+
+```python
+ax = da.art.quick_plot(gridfile="icon_grid.nc")
+```
+
+![Quick plot](./figs/quick.png)
+
+## Native-Grid Plotting
+
+Plot data directly on ICON triangular cells:
+
+```python
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+
+projection = ccrs.Robinson()
+fig, ax = plt.subplots(1, 1, figsize=(10, 4), subplot_kw={'projection': projection})
+da.viz.tricontourf(ax=ax, projection=projection, cmap='jet')
+```
+
+![Native triangular mineral dust forecast](./figs/native.png)
 
 ## Regridding
 
@@ -96,30 +120,12 @@ regular.plot()
 
 ![Regridded mineral dust forecast](./figs/ash_mixed.png)
 
-## Native-Grid Plotting
-
-Plot data directly on ICON triangular cells:
-
-```python
-import matplotlib.pyplot as plt
-
-fig, ax = plt.subplots(figsize=(12, 6))
-da.icon.tri_plot("icon_grid.nc", ax)
-```
-
-![Native triangular mineral dust forecast](./figs/ash_mixed_native.png)
-
-Quick map plot:
-
-```python
-ax = da.art.quick_plot(gridfile="icon_grid.nc")
-```
-
 Plot a vertical slice line:
 
 ```python
 ax = ds.icon.show_slice_line(points, gridpoints)
 ```
+![Slice line](./figs/slice.png)
 
 ## ART Tracer Diagnostics
 
@@ -143,7 +149,7 @@ bottom = plume.art.plume_bottom(ds["z_mc"])
 max_height = plume.art.max_conc_height(ds["z_mc"])
 ```
 
-Plume center of mass:
+Plume center:
 
 ```python
 center = plume.art.plume_center(
@@ -158,12 +164,3 @@ Value at plume top:
 ```python
 temp_at_top = plume.art.value_at_plume_top(ds["z_mc"], ds["temp"])
 ```
-
-## Build Documentation Locally
-
-```bash
-pip install -r docs/requirements.txt
-python -m sphinx -b html docs/source docs/build/html
-```
-
-The generated site is written to `docs/build/html`.

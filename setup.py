@@ -9,7 +9,7 @@ with open("readme.md", "r", encoding="utf-8") as f:
 
 setup(
      name='icon-artist',
-     version='0.0.1',
+     version='0.0.2',
      description='Post-processing and plotting ICON-ART output in python',
      long_description=long_description,
      long_description_content_type='text/markdown',

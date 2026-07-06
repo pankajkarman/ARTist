@@ -36,8 +36,6 @@ autodoc_mock_imports = [
     "matplotlib.cm",
     "matplotlib.collections",
     "numexpr",
-    "scipy",
-    "scipy.interpolate",
     "shapely",
 ]
 

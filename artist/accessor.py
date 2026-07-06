@@ -1,7 +1,6 @@
 import xarray as xr
 import numpy as np
 import pandas as pd
-from scipy.interpolate import griddata
 
 from .__plot import (
     plot_hov as _plot_hov,
@@ -212,6 +211,14 @@ class GridAccessor(object):
         >>> lat = np.linspace(40, 60, 81)
         >>> regular = da.icon.regrid("icon_grid.nc", lon, lat)
         """
+        try:
+            from scipy.interpolate import griddata
+        except ImportError as exc:
+            raise ImportError(
+                "SciPy is required for regridding. Install scipy to use "
+                "DataArray.icon.regrid()."
+            ) from exc
+
         _, _, _, clon, clat = add_grid(gridfile, ltranslon=ltranslon)
         y, x = np.meshgrid(lat, lon)
         nda = griddata((clon, clat), self._obj.squeeze(), (x, y), method=method)

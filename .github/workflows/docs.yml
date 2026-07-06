@@ -34,6 +34,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r docs/requirements.txt
           python -m pip install -r requirements.txt
+          python -m pip install -e .
 
       - name: Show documentation environment
         run: |
@@ -45,6 +46,7 @@ jobs:
         run: |
           test -f artist/__plot.py
           test -f docs/source/index.rst
+          python -c "import artist.accessor as accessor; print(accessor.ArtAccessor.__name__)"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

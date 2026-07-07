@@ -66,6 +66,7 @@ class IconAccessor(object):
 
         self.vlon, self.vlat = vlon, vlat
         self.clon, self.clat = clon, clat
+        self._obj.attrs["_artist_gridfile"] = str(gridfile)
 
         cell_dim = "ncells" if "ncells" in self._obj.dims else clon.dims[0]
         clon_values = np.asarray(clon.values)
@@ -506,6 +507,245 @@ class GridAccessor(object):
             ltranslon=ltranslon,
             add_colorbar=add_colorbar,
             map_extent=map_extent,
+        )
+
+
+@xr.register_dataset_accessor("oem")
+class OemAccessor(object):
+    """
+    Dataset-level helpers for preparing ICON OEM emission inputs.
+
+    Accessed as ``ds.oem`` after importing ``artist``.
+    """
+
+    def __init__(self, ds):
+        self._obj = ds
+
+    def map_edgar(
+        self,
+        edgar_directory=None,
+        year=None,
+        species=None,
+        gridfile=None,
+        output_dir="./output",
+        aux_data_path=None,
+        download=True,
+        weights_file=".remap_weights",
+        vertical_height=2.0,
+        temporal_profiles_type="THREE_CYCLES",
+        open_output=True,
+        edgar=None,
+    ):
+        """
+        Map EDGAR emissions for selected species to an ICON grid.
+
+        Parameters
+        ----------
+        edgar_directory : str or path-like
+            Directory containing EDGAR files, or download target when
+            ``download=True``.
+        year : int
+            EDGAR inventory year.
+        species : str or sequence of str
+            EDGAR species/substances, for example ``"CH4"`` or
+            ``["CH4", "CO2"]``.
+        gridfile : str or path-like, optional
+            ICON grid file used for remapping. If omitted, ARTist uses the
+            grid path remembered by ``ds.icon.add_grid(...)``.
+        output_dir : str or path-like, default "./output"
+            Directory where OEM output is written.
+        aux_data_path : str or path-like, optional
+            EDGAR auxiliary temporal profile directory.
+        download : bool, default True
+            Download EDGAR files for ``species`` before loading the inventory.
+        weights_file : str or path-like, default ".remap_weights"
+            Remapping weights cache file.
+        vertical_height : float, default 2.0
+            Constant vertical profile height.
+        temporal_profiles_type : str or enum, default "THREE_CYCLES"
+            Temporal profile type for interpolation and OEM export.
+        open_output : bool, default True
+            If True, open and return the gridded OEM NetCDF output.
+
+        Returns
+        -------
+        xarray.Dataset or pathlib.Path
+            Opened gridded emissions dataset when ``open_output=True``;
+            otherwise the gridded emissions path. Temporal and vertical
+            profile files remain in ``output_dir``.
+
+        Examples
+        --------
+        >>> import artist
+        >>> import xarray as xr
+        >>> ds = xr.Dataset()
+        >>> ds.icon.add_grid("icon_grid.nc")
+        >>> gridded = ds.oem.map_edgar(
+        ...     edgar_directory="./edgar",
+        ...     year=2022,
+        ...     species=["CH4", "CO2"],
+        ... )
+        """
+        from .oem import map_edgar
+
+        if edgar_directory is None:
+            edgar_directory = edgar
+
+        if gridfile is None:
+            gridfile = self._obj.attrs.get("_artist_gridfile")
+        if gridfile is None:
+            raise ValueError(
+                "gridfile is required unless the dataset was prepared with "
+                "ds.icon.add_grid(gridfile)."
+            )
+
+        gridded_emissions = map_edgar(
+            edgar_directory=edgar_directory,
+            year=year,
+            species=species,
+            gridfile=gridfile,
+            output_dir=output_dir,
+            aux_data_path=aux_data_path,
+            download=download,
+            weights_file=weights_file,
+            vertical_height=vertical_height,
+            temporal_profiles_type=temporal_profiles_type,
+            open_output=open_output,
+        )
+
+        self._obj.attrs["_artist_oem_edgar_directory"] = str(edgar_directory)
+        self._obj.attrs["_artist_oem_year"] = year
+        self._obj.attrs["_artist_oem_species"] = [species] if isinstance(species, str) else list(species)
+        return gridded_emissions
+
+    def plot_raw_edgar(
+        self,
+        edgar_directory=None,
+        year=None,
+        species=None,
+        total_only=True,
+        cmap="magma",
+        edgar=None,
+        **kwargs,
+    ):
+        """
+        Plot raw EDGAR inventory data before ICON remapping.
+
+        Parameters
+        ----------
+        edgar_directory : str or path-like or emiproc inventory
+            EDGAR directory or an already loaded emiproc inventory. If omitted,
+            ARTist reuses the directory from the previous ``ds.oem.map_edgar``
+            call.
+        year : int, optional
+            Inventory year, used when ``edgar_directory`` is a directory. If
+            omitted, ARTist reuses the year from the previous mapping call.
+        species : str or sequence of str, optional
+            Species used to narrow local EDGAR files when possible. If omitted,
+            ARTist reuses the species from the previous mapping call.
+        total_only : bool, default True
+            Forwarded to ``emiproc.plots.plot_inventory``.
+        cmap : str, default "magma"
+            Matplotlib colormap.
+        **kwargs
+            Extra keyword arguments passed to ``plot_inventory``.
+
+        Examples
+        --------
+        >>> ds.oem.plot_raw_edgar()
+        """
+        from .oem import plot_raw_edgar
+
+        if edgar_directory is None:
+            edgar_directory = edgar
+        if edgar_directory is None:
+            edgar_directory = self._obj.attrs.get("_artist_oem_edgar_directory")
+        if year is None:
+            year = self._obj.attrs.get("_artist_oem_year")
+        if species is None:
+            species = self._obj.attrs.get("_artist_oem_species")
+        if edgar_directory is None:
+            raise ValueError(
+                "edgar_directory is required unless this dataset has already "
+                "run ds.oem.map_edgar(...)."
+            )
+        pattern = kwargs.pop("pattern", "*.nc")
+
+        return plot_raw_edgar(
+            edgar_directory=edgar_directory,
+            year=year,
+            species=species,
+            pattern=pattern,
+            total_only=total_only,
+            cmap=cmap,
+            **kwargs,
+        )
+
+    def plot_mapped_emissions(
+        self,
+        emissions,
+        variable=None,
+        gridfile=None,
+        selectors=None,
+        ax=None,
+        cmap="magma",
+        vrange=None,
+        ltranslon=False,
+        add_colorbar=True,
+        edgecolor="face",
+        linewidth=0.0,
+    ):
+        """
+        Plot gridded OEM emissions after mapping to an ICON grid.
+
+        Parameters
+        ----------
+        emissions : xarray.Dataset or xarray.DataArray
+            Gridded OEM emissions returned by ``map_edgar`` or opened from
+            ``oem_gridded_emissions.nc``.
+        variable : str, optional
+            Variable to plot. Defaults to the first data variable.
+        gridfile : str or path-like, optional
+            ICON grid file. If omitted, ARTist uses the grid path remembered by
+            ``ds.icon.add_grid(...)``.
+        selectors : dict, optional
+            Coordinate selections applied before plotting.
+        ax : matplotlib.axes.Axes, optional
+            Target axes.
+        cmap : str, default "magma"
+            Matplotlib colormap.
+
+        Examples
+        --------
+        >>> gridded = ds.oem.map_edgar(
+        ...     edgar_directory="./edgar",
+        ...     year=2022,
+        ...     species=["CH4"],
+        ... )
+        >>> ax = ds.oem.plot_mapped_emissions(gridded)
+        """
+        from .oem import plot_mapped_emissions
+
+        if gridfile is None:
+            gridfile = self._obj.attrs.get("_artist_gridfile")
+        if gridfile is None:
+            raise ValueError(
+                "gridfile is required unless the dataset was prepared with "
+                "ds.icon.add_grid(gridfile)."
+            )
+
+        return plot_mapped_emissions(
+            emissions,
+            gridfile=gridfile,
+            variable=variable,
+            selectors=selectors,
+            ax=ax,
+            cmap=cmap,
+            vrange=vrange,
+            ltranslon=ltranslon,
+            add_colorbar=add_colorbar,
+            edgecolor=edgecolor,
+            linewidth=linewidth,
         )
 
 

@@ -7,4 +7,5 @@ User Guide
    accessors
    grids
    plume
+   oem
    plotting

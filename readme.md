@@ -4,7 +4,8 @@ ARTist is an xarray-native Python toolkit for post-processing, diagnosing, and
 plotting [ICON-ART](https://www.imk-tro.kit.edu/english/5925.php) model output.
 It adds convenient accessors to xarray `Dataset` and `DataArray` objects for
 working with native ICON grids, regridding fields, visualizing triangular-cell
-data, and calculating ART tracer and plume diagnostics.
+data, calculating ART tracer and plume diagnostics, and preparing EDGAR
+emission inventories for ICON's online emission module (OEM).
 
 **Aerosol and Reactive Trace gases (ART)** is a submodule of
 [ICON](https://www.dwd.de/EN/research/weatherforecasting/num_modelling/01_num_weather_prediction_modells/icon_description.html)
@@ -34,6 +35,21 @@ With conda, Cartopy is usually easiest to install from conda-forge:
 conda install -c conda-forge cartopy
 ```
 
+Core dependencies are `numpy`, `scipy`, `pandas`, `xarray`, and `matplotlib`.
+Native-grid map plotting uses Cartopy when geographic projections are needed.
+
+EDGAR emission preprocessing and OEM export use
+[`emiproc`](https://emiproc.readthedocs.io/) as an optional dependency:
+
+```bash
+pip install emiproc
+```
+
+`emiproc` brings the geospatial and NetCDF stack needed for this workflow,
+including `geopandas`, `shapely`, `pyogrio`, `netCDF4`, `rasterio`, and `dask`.
+For a more controlled scientific environment, install these packages from
+conda-forge.
+
 ## Documentation
 
 Latest documentation is available at: https://pankajkarman.github.io/ARTist/
@@ -56,6 +72,7 @@ ARTist currently registers these accessors:
 
 - `ds.icon`: dataset-level ICON grid helpers
 - `da.icon`: DataArray-level native-grid helpers
+- `ds.oem`: EDGAR-to-ICON OEM emission mapping helpers
 - `ds.art`: dataset-level ART optical diagnostics
 - `da.art`: ART tracer diagnostics
 - `da.viz`: lightweight plotting helper for arrays with `clon`/`clat`
@@ -88,6 +105,7 @@ Find variables by name:
 ```python
 ash_variables = ds.icon.look_up("ash")
 ```
+
 ## Quick plot
 
 ```python
@@ -225,3 +243,30 @@ dcdt_acc, dcdt_coa, dcdt = ds.art.coating_fraction()
 r_eff_ash = ds.art.effective_radius("ash")
 r_eff_sulfate = ds.art.reff_sulfate()
 ```
+
+## OEM Emission Mapping
+
+Preprocess EDGAR emissions for ICON's online emission module using the optional
+`emiproc` workflow. `ds.oem.map_edgar(...)` can download/load EDGAR inventories,
+remap them to the ICON grid remembered by `ds.icon.add_grid(...)`, and export
+the gridded emissions plus temporal and vertical profile files expected by OEM:
+
+```python
+ds = xr.Dataset()
+ds.icon.add_grid("icon_grid.nc")
+
+gridded_emissions = ds.oem.map_edgar(
+    edgar_directory="./edgar",
+    year=2022,
+    species=["CH4", "CO2", "CO"],
+    output_dir="./output",
+    aux_data_path="./edgar/aux",
+)
+
+ds.oem.plot_raw_edgar()
+ax = ds.oem.plot_mapped_emissions(gridded_emissions)
+```
+
+The main return value is the gridded emissions dataset. The output directory
+also contains profile files such as `dayofweek.nc`, `hourofday.nc`,
+`monthofyear.nc`, and `vertical_profiles.nc`.

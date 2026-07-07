@@ -23,6 +23,31 @@ When using conda, Cartopy is usually easiest to install from conda-forge:
 
    conda install -c conda-forge cartopy
 
+Dependencies
+------------
+
+The core package depends on ``numpy``, ``scipy``, ``pandas``, ``xarray``, and
+``matplotlib``. These cover grid helpers, interpolation, diagnostics, and basic
+plotting.
+
+Optional plotting on geographic projections uses ``cartopy``:
+
+.. code-block:: bash
+
+   conda install -c conda-forge cartopy
+
+EDGAR emission preprocessing for ICON's online emission module uses
+``emiproc``:
+
+.. code-block:: bash
+
+   pip install emiproc
+
+The ``emiproc`` workflow also uses geospatial and NetCDF packages such as
+``geopandas``, ``shapely``, ``pyogrio``, ``netCDF4``, ``rasterio``, and
+``dask``. Installing this stack from conda-forge is usually the most reliable
+option on fresh scientific Python environments.
+
 Importing ARTist
 ----------------
 

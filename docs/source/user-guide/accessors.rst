@@ -28,6 +28,22 @@ Use ``da.icon`` for native-grid operations on a single field:
    regular = da.icon.regrid(lon, lat)
    triangles, colors, cmap = da.icon.tri_data()
 
+OEM Dataset Accessor: ``ds.oem``
+--------------------------------
+
+Use ``ds.oem`` to map EDGAR emissions to an ICON grid for OEM input files:
+
+.. code-block:: python
+
+   ds = xr.Dataset()
+   ds.icon.add_grid("icon_grid.nc")
+   gridded_emissions = ds.oem.map_edgar(
+       edgar_directory="./edgar",
+       year=2022,
+       species=["CH4", "CO2"],
+   )
+   ax = ds.oem.plot_mapped_emissions(gridded_emissions)
+
 ART Tracer Accessor: ``da.art``
 -------------------------------
 

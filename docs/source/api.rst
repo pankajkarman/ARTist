@@ -157,6 +157,40 @@ ART dataset accessor: ``ds.art``
 ``ssa(wavelength)``
    Compute mass-weighted single-scattering albedo.
 
+OEM dataset accessor: ``ds.oem``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``ds.oem`` provides helpers for preparing ICON online emission module inputs:
+
+``map_edgar(edgar_directory, year, species, gridfile=None, output_dir="./output", ...)``
+   Map EDGAR emissions for selected species to an ICON grid and return the
+   exported OEM emissions dataset.
+
+``plot_raw_edgar(edgar_directory=None, year=None, species=None, total_only=True, cmap="magma", **kwargs)``
+   Plot raw EDGAR inventory data before ICON remapping. If called after
+   ``ds.oem.map_edgar(...)``, EDGAR directory, year, and species are inferred.
+
+``plot_mapped_emissions(emissions, variable=None, gridfile=None, selectors=None, ax=None, ...)``
+   Plot gridded OEM emissions after mapping to an ICON grid.
+
+OEM Utility Functions
+---------------------
+
+``artist.oem.map_edgar(edgar_directory, year, species, gridfile, output_dir="./output", ...)``
+   High-level EDGAR-to-ICON OEM workflow.
+
+``artist.oem.download_edgar(local_dir, year, substances)``
+   Download EDGAR inventory files with emiproc.
+
+``artist.oem.load_edgar_inventory(local_dir, pattern="*.nc", year=None, substances=None)``
+   Load an EDGAR v8 inventory.
+
+``artist.oem.remap_to_icon(inventory, icon_grid, weights_file=".remap_weights")``
+   Remap an emiproc inventory to an ICON grid.
+
+``artist.oem.export_icon_oem(inventory, icon_grid_file, output_dir, temporal_profiles_type="THREE_CYCLES")``
+   Export ICON OEM input files.
+
 Utility Functions
 -----------------
 

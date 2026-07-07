@@ -39,7 +39,7 @@ Importing :mod:`artist` registers accessors on xarray objects:
      <article class="artist-card">
        <div class="artist-card-icon">▦</div>
        <h2>User guide</h2>
-       <p>Work with ICON grids, ART tracers, plume diagnostics, native-grid plots, and regular lon/lat regridding.</p>
+       <p>Work with ICON grids, ART tracers, plume diagnostics, native-grid plots, regular lon/lat regridding, and EDGAR/OEM preprocessing.</p>
        <p><a href="user-guide/index.html">User Guide</a></p>
      </article>
      <article class="artist-card">

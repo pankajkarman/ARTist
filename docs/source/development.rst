@@ -26,6 +26,17 @@ On Windows, use:
 
 The generated site is written to ``docs/build/html``.
 
+Run Tests
+---------
+
+ARTist tests use ``pytest``. Install it in your development environment and run
+the focused test suite from the repository root:
+
+.. code-block:: bash
+
+   pip install pytest
+   python -m pytest tests
+
 Documentation Style
 -------------------
 

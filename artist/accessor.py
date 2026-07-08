@@ -75,8 +75,11 @@ class IconAccessor(object):
         if cell_dim in self._obj.dims and self._obj.sizes[cell_dim] == clon_values.size:
             if cell_dim not in self._obj.coords:
                 self._obj.coords[cell_dim] = np.arange(clon_values.size)
+            self._obj.coords[cell_dim].attrs["_artist_gridfile"] = str(gridfile)
             self._obj.coords["clon"] = (cell_dim, clon_values)
             self._obj.coords["clat"] = (cell_dim, clat_values)
+            self._obj.coords["clon"].attrs["_artist_gridfile"] = str(gridfile)
+            self._obj.coords["clat"].attrs["_artist_gridfile"] = str(gridfile)
             vlon_values = np.asarray(vlon.values)
             vlat_values = np.asarray(vlat.values)
             if vlon_values.shape[0] != clon_values.size and vlon_values.shape[-1] == clon_values.size:
@@ -91,6 +94,7 @@ class IconAccessor(object):
             self._obj.coords["clat_vertices"] = ((cell_dim, vertex_dim), vlat_values)
             for name, var in self._obj.data_vars.items():
                 if cell_dim in var.dims and var.sizes[cell_dim] == clon_values.size:
+                    self._obj[name].attrs["_artist_gridfile"] = str(gridfile)
                     self._obj[name].attrs["_artist_vlon"] = vlon_values
                     self._obj[name].attrs["_artist_vlat"] = vlat_values
 
@@ -362,20 +366,38 @@ class GridAccessor(object):
     def __init__(self, da):
         self._obj = da
 
+    def _gridfile(self, gridfile=None):
+        if gridfile is not None:
+            return gridfile
+        if "_artist_gridfile" in self._obj.attrs:
+            return self._obj.attrs["_artist_gridfile"]
+        for coord in ("clon", "clat", "ncells", "cell"):
+            if coord in self._obj.coords and "_artist_gridfile" in self._obj.coords[coord].attrs:
+                return self._obj.coords[coord].attrs["_artist_gridfile"]
+        return None
+
     def _grid_centers(self, gridfile=None, ltranslon=False):
         if "clon" in self._obj.coords and "clat" in self._obj.coords:
             clon = np.asarray(self._obj.coords["clon"].values)
             clat = np.asarray(self._obj.coords["clat"].values)
-        elif gridfile is not None:
+        else:
+            gridfile = self._gridfile(gridfile)
+            if gridfile is None:
+                raise ValueError(
+                    "Native-grid center coordinates are missing. Call "
+                    "ds.icon.add_grid(...) before selecting this DataArray, or pass "
+                    "gridfile=... as a fallback."
+                )
             _, _, _, clon, clat = add_grid(gridfile, ltranslon=ltranslon)
             clon = np.asarray(clon.values)
             clat = np.asarray(clat.values)
-        else:
-            raise ValueError(
-                "Native-grid center coordinates are missing. Call "
-                "ds.icon.add_grid(...) before selecting this DataArray, or pass "
-                "gridfile=... as a fallback."
-            )
+
+        cell_dim = "ncells" if "ncells" in self._obj.dims else "cell" if "cell" in self._obj.dims else None
+        if cell_dim is not None and clon.size != self._obj.sizes[cell_dim] and cell_dim in self._obj.coords:
+            index = np.asarray(self._obj.coords[cell_dim].values)
+            if np.issubdtype(index.dtype, np.integer) and index.size == self._obj.sizes[cell_dim]:
+                clon = clon[index]
+                clat = clat[index]
 
         if ltranslon:
             clon = (clon + 360) % 360
@@ -480,7 +502,17 @@ class GridAccessor(object):
         """
         return _tri_data(self, gridfile, cmap=cmap, vrange=vrange, ltranslon=ltranslon)
 
-    def tri_plot(self, ax, gridfile=None, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
+    def tri_plot(
+        self,
+        ax,
+        gridfile=None,
+        cmap=None,
+        vrange=[],
+        ltranslon=False,
+        add_colorbar=True,
+        map_extent=None,
+        projection=None,
+    ):
         """
         Plot this DataArray on ICON native triangular cells.
 
@@ -493,6 +525,9 @@ class GridAccessor(object):
         >>> fig, ax = plt.subplots()
         >>> ds.icon.add_grid("icon_grid.nc")
         >>> ds["ash_mixed_acc"].icon.tri_plot(ax)
+        >>> # With Cartopy:
+        >>> # ax = plt.axes(projection=ccrs.Robinson())
+        >>> # ds["ash_mixed_acc"].icon.tri_plot(ax, projection=ccrs.Robinson())
         """
         if isinstance(ax, (str, bytes)):
             # Backward compatibility for da.icon.tri_plot(gridfile, ax).
@@ -507,6 +542,7 @@ class GridAccessor(object):
             ltranslon=ltranslon,
             add_colorbar=add_colorbar,
             map_extent=map_extent,
+            projection=projection,
         )
 
 

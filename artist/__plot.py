@@ -373,11 +373,7 @@ class PlotAccessor(object):
         if "_artist_vlon" in self._obj.attrs and "_artist_vlat" in self._obj.attrs:
             return self._obj.attrs["_artist_vlon"], self._obj.attrs["_artist_vlat"]
 
-        raise ValueError(
-            "PolyCollection plotting needs vertex coordinates. Call "
-            "ds.icon.add_grid(...) before selecting this DataArray, or pass "
-            "vlon=... and vlat=... explicitly."
-        )
+        return _dataarray_vertices(self._obj, ltranslon=False)
 
 
 def show_slice_line(self, points, gridpoints, grid_stride=5):
@@ -431,6 +427,28 @@ def show_slice_line(self, points, gridpoints, grid_stride=5):
     return ax
 
 
+def _gridfile_from_dataarray(da, gridfile=None):
+    if gridfile is not None:
+        return gridfile
+    if "_artist_gridfile" in da.attrs:
+        return da.attrs["_artist_gridfile"]
+    for coord in ("clon", "clat", "ncells", "cell"):
+        if coord in da.coords and "_artist_gridfile" in da.coords[coord].attrs:
+            return da.coords[coord].attrs["_artist_gridfile"]
+    return None
+
+
+def _subset_grid_vertices(da, vlon, vlat):
+    cell_dim = "ncells" if "ncells" in da.dims else "cell" if "cell" in da.dims else None
+    if cell_dim is None or vlon.shape[0] == da.sizes[cell_dim] or cell_dim not in da.coords:
+        return vlon, vlat
+
+    index = np.asarray(da.coords[cell_dim].values)
+    if np.issubdtype(index.dtype, np.integer) and index.size == da.sizes[cell_dim]:
+        return vlon[index], vlat[index]
+    return vlon, vlat
+
+
 def _dataarray_vertices(da, gridfile=None, ltranslon=False):
     for lon_name, lat_name in (("vlon", "vlat"), ("clon_vertices", "clat_vertices")):
         if lon_name in da.coords and lat_name in da.coords:
@@ -441,22 +459,19 @@ def _dataarray_vertices(da, gridfile=None, ltranslon=False):
         if "_artist_vlon" in da.attrs and "_artist_vlat" in da.attrs:
             vlon = np.asarray(da.attrs["_artist_vlon"])
             vlat = np.asarray(da.attrs["_artist_vlat"])
-            cell_dim = "ncells" if "ncells" in da.dims else "cell" if "cell" in da.dims else None
-            if cell_dim is not None and vlon.shape[0] != da.sizes[cell_dim] and cell_dim in da.coords:
-                index = np.asarray(da.coords[cell_dim].values)
-                if np.issubdtype(index.dtype, np.integer) and index.size == da.sizes[cell_dim]:
-                    vlon = vlon[index]
-                    vlat = vlat[index]
-        elif gridfile is not None:
+        else:
+            gridfile = _gridfile_from_dataarray(da, gridfile=gridfile)
+            if gridfile is None:
+                raise ValueError(
+                    "Native-grid vertex coordinates are missing. Call "
+                    "ds.icon.add_grid(...) before selecting this DataArray, or pass "
+                    "gridfile=... as a fallback."
+                )
             _, vlon, vlat, _, _ = add_grid(gridfile, ltranslon=ltranslon)
             vlon = np.asarray(vlon.values)
             vlat = np.asarray(vlat.values)
-        else:
-            raise ValueError(
-                "Native-grid vertex coordinates are missing. Call "
-                "ds.icon.add_grid(...) before selecting this DataArray, or pass "
-                "gridfile=... as a fallback."
-            )
+
+    vlon, vlat = _subset_grid_vertices(da, vlon, vlat)
 
     if ltranslon:
         vlon = (vlon + 360) % 360
@@ -534,7 +549,17 @@ def tri_data(self, gridfile=None, cmap=None, vrange=[], ltranslon=True):
     return triangles, colors, cmp
 
 
-def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colorbar=True, map_extent=None):
+def tri_plot(
+    self,
+    gridfile,
+    ax,
+    cmap=None,
+    vrange=[],
+    ltranslon=False,
+    add_colorbar=True,
+    map_extent=None,
+    projection=None,
+):
     """
     Plot a DataArray on ICON native triangular cells.
 
@@ -556,6 +581,10 @@ def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colo
         If True, add a colorbar.
     map_extent : sequence, optional
         `[lon_min, lon_max, lat_min, lat_max]` plot extent.
+    projection : cartopy.crs.Projection, optional
+        Map projection used by the target axes. When provided, or when `ax` is
+        a Cartopy GeoAxes, polygons are interpreted as lon/lat coordinates and
+        transformed from PlateCarree.
 
     Examples
     --------
@@ -566,7 +595,19 @@ def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colo
     >>> ds["ash_mixed_acc"].icon.tri_plot(ax)
     """
     triangles, colors, cmp = self.tri_data(gridfile, cmap=cmap, vrange=vrange, ltranslon=ltranslon)
-    coll = PolyCollection(triangles, facecolor=colors, closed=True, edgecolor="face")
+
+    transform = None
+    if projection is not None or hasattr(ax, "projection"):
+        ccrs, _ = _cartopy()
+        transform = ccrs.PlateCarree()
+
+    coll = PolyCollection(
+        triangles,
+        facecolor=colors,
+        closed=True,
+        edgecolor="face",
+        transform=transform,
+    )
     ax.add_collection(coll, autolim=True)
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
@@ -575,11 +616,18 @@ def tri_plot(self, gridfile, ax, cmap=None, vrange=[], ltranslon=False, add_colo
         plt.colorbar(cmp, ax=ax)
 
     if map_extent:
-        ax.set_xlim([map_extent[0], map_extent[1]])
-        ax.set_ylim([map_extent[2], map_extent[3]])
+        if hasattr(ax, "set_extent"):
+            ccrs, _ = _cartopy()
+            ax.set_extent(map_extent, crs=ccrs.PlateCarree())
+        else:
+            ax.set_xlim([map_extent[0], map_extent[1]])
+            ax.set_ylim([map_extent[2], map_extent[3]])
     else:
-        ax.set_xlim([self.vlon.min(), self.vlon.max()])
-        ax.set_ylim([self.vlat.min(), self.vlat.max()])
+        if hasattr(ax, "projection"):
+            ax.set_global()
+        else:
+            ax.set_xlim([self.vlon.min(), self.vlon.max()])
+            ax.set_ylim([self.vlat.min(), self.vlat.max()])
     return cmp
 
 

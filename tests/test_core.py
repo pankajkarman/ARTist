@@ -74,6 +74,8 @@ def test_icon_accessor_add_grid_selection_and_lookup(tmp_path):
     grid.close()
 
     assert ds.attrs["_artist_gridfile"] == str(gridfile)
+    assert ds.coords["ncells"].attrs["_artist_gridfile"] == str(gridfile)
+    assert ds["ash_mixed_acc"].attrs["_artist_gridfile"] == str(gridfile)
     assert "clon" in ds.coords
     assert "clat_vertices" in ds.coords
     assert ds.icon.look_up("ash") == ["ash_mixed_acc"]
@@ -104,6 +106,31 @@ def test_dataarray_regrid_and_tri_plot(tmp_path):
 
     fig, ax = plt.subplots()
     ds["field"].icon.tri_plot(ax, ltranslon=False, add_colorbar=False)
+    assert any(isinstance(collection, PolyCollection) for collection in ax.collections)
+    plt.close(fig)
+
+    fig, ax = plt.subplots()
+    ds["field"].icon.tri_plot(ax, ltranslon=False, add_colorbar=False, projection=None)
+    assert any(isinstance(collection, PolyCollection) for collection in ax.collections)
+    plt.close(fig)
+
+    derived = (ds["field"] + 1.0).assign_coords(clon=ds["clon"], clat=ds["clat"])
+    derived_triangles, derived_colors, _ = derived.icon.tri_data(ltranslon=False)
+    assert len(derived_triangles) == 4
+    assert derived_colors.shape[0] == 4
+
+    derived_without_centers = (ds["field"] + 1.0).reset_coords(["clon", "clat"], drop=True)
+    fallback_triangles, fallback_colors, _ = derived_without_centers.icon.tri_data(ltranslon=False)
+    assert len(fallback_triangles) == 4
+    assert fallback_colors.shape[0] == 4
+
+    subset = derived_without_centers.isel(ncells=[1, 3])
+    subset_triangles, subset_colors, _ = subset.icon.tri_data(ltranslon=False)
+    assert len(subset_triangles) == 2
+    assert subset_colors.shape[0] == 2
+
+    fig, ax = plt.subplots()
+    subset.viz.tricontourf(ax, backend="polycollection", add_colorbar=False)
     assert any(isinstance(collection, PolyCollection) for collection in ax.collections)
     plt.close(fig)
 

@@ -687,6 +687,8 @@ def plot_mapped_emissions(
     add_colorbar=True,
     edgecolor="face",
     linewidth=0.0,
+    projection=None,
+    map_extent=None,
 ):
     """
     Plot gridded OEM emissions after mapping to an ICON grid.
@@ -716,6 +718,12 @@ def plot_mapped_emissions(
         Polygon edge color.
     linewidth : float, default 0.0
         Polygon edge width.
+    projection : cartopy.crs.Projection, optional
+        Map projection used by the target axes. When provided, or when `ax` is
+        a Cartopy GeoAxes, polygons are interpreted as lon/lat coordinates and
+        transformed from PlateCarree.
+    map_extent : sequence, optional
+        `[lon_min, lon_max, lat_min, lat_max]` plot extent.
 
     Returns
     -------
@@ -771,11 +779,35 @@ def plot_mapped_emissions(
         closed=True,
         edgecolor=edgecolor,
         linewidth=linewidth,
+        transform=_plate_carree_transform(ax, projection),
     )
     ax.add_collection(collection, autolim=True)
-    ax.autoscale_view()
+    if map_extent is not None:
+        if hasattr(ax, "set_extent"):
+            transform = _plate_carree_transform(ax, projection)
+            ax.set_extent(map_extent, crs=transform)
+        else:
+            ax.set_xlim([map_extent[0], map_extent[1]])
+            ax.set_ylim([map_extent[2], map_extent[3]])
+    elif hasattr(ax, "projection"):
+        ax.set_global()
+    else:
+        ax.autoscale_view()
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
     if add_colorbar:
         plt.colorbar(scalar_map, ax=ax)
     return ax
+
+
+def _plate_carree_transform(ax=None, projection=None):
+    if projection is None and not hasattr(ax, "projection"):
+        return None
+    try:
+        import cartopy.crs as ccrs
+    except ImportError as exc:
+        raise ImportError(
+            "Cartopy is required for projected OEM emission plots. "
+            "Install cartopy or plot on regular Matplotlib axes."
+        ) from exc
+    return ccrs.PlateCarree()

@@ -730,6 +730,8 @@ class OemAccessor(object):
         add_colorbar=True,
         edgecolor="face",
         linewidth=0.0,
+        projection=None,
+        map_extent=None,
     ):
         """
         Plot gridded OEM emissions after mapping to an ICON grid.
@@ -750,6 +752,10 @@ class OemAccessor(object):
             Target axes.
         cmap : str, default "magma"
             Matplotlib colormap.
+        projection : cartopy.crs.Projection, optional
+            Map projection used by the target axes.
+        map_extent : sequence, optional
+            `[lon_min, lon_max, lat_min, lat_max]` plot extent.
 
         Examples
         --------
@@ -782,6 +788,8 @@ class OemAccessor(object):
             add_colorbar=add_colorbar,
             edgecolor=edgecolor,
             linewidth=linewidth,
+            projection=projection,
+            map_extent=map_extent,
         )
 
 

@@ -1,6 +1,7 @@
 mie.ipynb
 *.csv
 _oem_real_test/
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

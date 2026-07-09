@@ -1,0 +1,3 @@
+[submodule "artist/icontoolbox"]
+	path = artist/icontoolbox
+	url = https://github.com/tppcc/icontoolbox.git

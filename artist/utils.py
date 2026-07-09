@@ -1,59 +1,82 @@
-import glob
 import xarray as xr
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from scipy.interpolate import griddata
-import cartopy.crs as ccrs
 
-@xr.register_dataarray_accessor('viz')
-class PlotAccessor(object):
-    def __init__(self, da):
-        self._obj = da
-    
-    def tricontourf(self, ax, cmap='coolwarm', levels=10, add_colorbar=True, map_extent=None, projection=None):
-        if projection:
-            if projection == ccrs.PlateCarree():
-                tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)
-            else:
-                try:
-                    mproj = projection.transform_points(
-                        ccrs.PlateCarree(),
-                        self._obj.clon,
-                        self._obj.clat
-                    )
-                    x, y =  mproj[:, 0],  mproj[:, 1]
-                    tcf = ax.tricontourf(x, y, self._obj, cmap=cmap, levels=levels)
-                except:
-                    ax.set_global()
-                    tcf = ax.tricontourf(self._obj.clon,  self._obj.clat, self._obj,
-                            levels=levels,
-                            cmap=cmap,
-                            transform=ccrs.PlateCarree())
 
-        else:
-            tcf = ax.tricontourf(self._obj.clon, self._obj.clat, self._obj, cmap=cmap, levels=levels)
+def distance(origin, destination, radius=6371.0):
+    """
+    Compute great-circle distance between lon/lat coordinates.
 
-        if add_colorbar:
-            cbar = plt.colorbar(tcf, orientation='vertical', pad=0.05)
-            try:
-                cbar.set_label(self._obj.attrs['standard_name'])
-            except:
-                pass
-        return ax
-    
-    
+    Parameters
+    ----------
+    origin, destination : array-like
+        Coordinate pairs in degrees as ``[lon, lat]``. Inputs may also be
+        arrays whose last dimension is ``(lon, lat)``.
+    radius : float, default 6371.0
+        Spherical Earth radius in kilometers.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        Distance in kilometers.
+
+    Examples
+    --------
+    >>> from artist.utils import distance
+    >>> distance([8.4, 49.0], [13.4, 52.5])
+    """
+    origin = np.asarray(origin, dtype=float)
+    destination = np.asarray(destination, dtype=float)
+
+    lon1, lat1 = np.moveaxis(origin, -1, 0)
+    lon2, lat2 = np.moveaxis(destination, -1, 0)
+
+    dlat = np.radians(lat2 - lat1)
+    dlon = np.radians(lon2 - lon1)
+    lat1 = np.radians(lat1)
+    lat2 = np.radians(lat2)
+
+    a = (
+        np.sin(dlat / 2.0) ** 2
+        + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2.0) ** 2
+    )
+    c = 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
+    return radius * c
+
+
 def add_grid(gridfile, ltranslon=True):
-    rad2deg = 45./np.arctan(1.)
-    g = xr.open_dataset(gridfile) 
-    vlon = g.clon_vertices
-    vlat = g.clat_vertices
-    vlon, vlat = vlon*rad2deg, vlat*rad2deg
-    clon, clat = g.clon*rad2deg, g.clat*rad2deg
-    # ncells, nv = vlon.shape[0], vlon.shape[1]
+    """
+    Open an ICON grid file and return grid geometry in degrees.
+
+    Parameters
+    ----------
+    gridfile : str or path-like
+        Path to an ICON grid NetCDF file containing `clon`, `clat`,
+        `clon_vertices`, and `clat_vertices` in radians.
+    ltranslon : bool, default True
+        If True, transform longitudes from the [-180, 180] convention to
+        [0, 360].
+
+    Returns
+    -------
+    tuple
+        `(grid, vlon, vlat, clon, clat)`, where `grid` is the opened xarray
+        dataset and all coordinate arrays are converted to degrees.
+
+    Examples
+    --------
+    >>> from artist.utils import add_grid
+    >>> grid, vlon, vlat, clon, clat = add_grid("icon_grid.nc")
+    """
+    rad2deg = 180.0 / np.pi
+    g = xr.open_dataset(gridfile)
+
+    vlon = g.clon_vertices * rad2deg
+    vlat = g.clat_vertices * rad2deg
+    clon = g.clon * rad2deg
+    clat = g.clat * rad2deg
+
     if ltranslon:
         vlon = (vlon + 360) % 360
         clon = (clon + 360) % 360
-    else:
-        vlon = vlon
+
     return g, vlon, vlat, clon, clat
